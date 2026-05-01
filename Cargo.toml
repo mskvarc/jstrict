@@ -24,6 +24,9 @@ serde = ["dep:serde", "smallstr/serde"]
 ## Compatibility layer with the `serde_json` crate.
 serde_json = ["dep:serde_json"]
 
+## Compatibility layer with the `sonic-rs` crate.
+sonic-rs = ["dep:sonic-rs"]
+
 ## SIMD-accelerated UTF-8 validation in the slice parser.
 simdutf8 = ["dep:simdutf8"]
 
@@ -47,6 +50,7 @@ contextual = { version = "0.1.1", optional = true }
 ryu-js = { version = "0.2.2", optional = true }
 serde = { version = "1.0", optional = true }
 serde_json = { version = "1.0", optional = true }
+sonic-rs = { version = "0.3", optional = true }
 simdutf8 = { version = "0.1", optional = true }
 utf8-decode = "1.0.1"
 
@@ -63,6 +67,10 @@ required-features = ["serde"]
 [[example]]
 name = "serde_json"
 required-features = ["serde_json"]
+
+[[example]]
+name = "sonic_rs"
+required-features = ["sonic-rs"]
 
 [[bench]]
 name = "parse"

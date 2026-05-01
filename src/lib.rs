@@ -21,6 +21,7 @@
 //!   enabled with the `canonicalization` feature.
 //! - `serde` support (by enabling the `serde` feature).
 //! - Conversion from/to `serde_json::Value` (by enabling the `serde_json` feature).
+//! - Conversion from/to `sonic_rs::Value` (by enabling the `sonic-rs` feature).
 //! - Thoroughly tested.
 //!
 //! # Usage

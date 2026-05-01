@@ -15,6 +15,9 @@ pub mod serde;
 #[cfg(feature = "serde_json")]
 pub mod serde_json;
 
+#[cfg(feature = "sonic-rs")]
+pub mod sonic_rs;
+
 /// JSON number buffer based on [`SmallVec`](smallvec::SmallVec).
 pub type SmallNumberBuf<const LEN: usize = 8> = NumberBuf<SmallVec<[u8; LEN]>>;
 
