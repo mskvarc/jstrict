@@ -1,4 +1,4 @@
-use crate::{object::Entry, Value};
+use crate::{object::Entry, Object, Value};
 
 impl Value {
 	/// Converts a [`serde_json::Value`] into a `Value`.
@@ -25,13 +25,19 @@ impl Value {
 			serde_json::Value::Number(n) => Self::Number(n.into()),
 			serde_json::Value::String(s) => Self::String(s.into()),
 			serde_json::Value::Array(a) => {
-				Self::Array(a.into_iter().map(Self::from_serde_json).collect())
+				let mut out = Vec::with_capacity(a.len());
+				for v in a {
+					out.push(Self::from_serde_json(v));
+				}
+				Self::Array(out)
 			}
-			serde_json::Value::Object(o) => Self::Object(
-				o.into_iter()
-					.map(|(k, v)| Entry::new(k.into(), Self::from_serde_json(v)))
-					.collect(),
-			),
+			serde_json::Value::Object(o) => {
+				let mut out = Object::with_capacity(o.len());
+				for (k, v) in o {
+					out.push_entry(Entry::new(k.into(), Self::from_serde_json(v)));
+				}
+				Self::Object(out)
+			}
 		}
 	}
 
@@ -59,13 +65,19 @@ impl Value {
 			Self::Number(n) => serde_json::Value::Number(n.into()),
 			Self::String(s) => serde_json::Value::String(s.into_string()),
 			Self::Array(a) => {
-				serde_json::Value::Array(a.into_iter().map(Value::into_serde_json).collect())
+				let mut out = Vec::with_capacity(a.len());
+				for v in a {
+					out.push(Value::into_serde_json(v));
+				}
+				serde_json::Value::Array(out)
 			}
-			Self::Object(o) => serde_json::Value::Object(
-				o.into_iter()
-					.map(|Entry { key, value }| (key.into_string(), Value::into_serde_json(value)))
-					.collect(),
-			),
+			Self::Object(o) => {
+				let mut out = serde_json::Map::with_capacity(o.len());
+				for Entry { key, value } in o {
+					out.insert(key.into_string(), Value::into_serde_json(value));
+				}
+				serde_json::Value::Object(out)
+			}
 		}
 	}
 }

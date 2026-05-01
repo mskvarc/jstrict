@@ -104,5 +104,41 @@ fn bench_parse_pathological(c: &mut Criterion) {
 	group.finish();
 }
 
-criterion_group!(benches, bench_parse, bench_parse_pathological);
+/// Mirror of `bench_parse` but using `parse_str_value` / `parse_slice_value`,
+/// the no-`CodeMap` entry points. This delta vs `parse/*` measures the
+/// `Mapper` monomorphisation win.
+fn bench_parse_value(c: &mut Criterion) {
+	for (name, input) in fixtures_with_baseline() {
+		let mut group = c.benchmark_group(format!("parse_value/{}", name));
+		group.throughput(Throughput::Bytes(input.len() as u64));
+
+		group.bench_with_input(
+			BenchmarkId::new("json_syntax", "str_value"),
+			input.as_str(),
+			|b, s| b.iter(|| json_syntax::parse::parse_str_value(black_box(s)).unwrap()),
+		);
+
+		let bytes = input.as_bytes().to_vec();
+		group.bench_with_input(
+			BenchmarkId::new("json_syntax", "slice_value"),
+			&bytes,
+			|b, s| b.iter(|| json_syntax::parse::parse_slice_value(black_box(s.as_slice())).unwrap()),
+		);
+
+		group.bench_with_input(
+			BenchmarkId::new("serde_json", "from_str"),
+			input.as_str(),
+			|b, s| b.iter(|| serde_json::from_str::<serde_json::Value>(black_box(s)).unwrap()),
+		);
+
+		group.finish();
+	}
+}
+
+criterion_group!(
+	benches,
+	bench_parse,
+	bench_parse_pathological,
+	bench_parse_value
+);
 criterion_main!(benches);

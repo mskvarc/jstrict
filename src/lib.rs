@@ -439,10 +439,34 @@ impl Value {
 
 	/// Puts this JSON value in canonical form according to
 	/// [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785).
+	///
+	/// For predictable performance in tight loops, use
+	/// [`Self::canonicalize_with`] with a caller-owned buffer.
 	#[cfg(feature = "canonicalize")]
 	pub fn canonicalize(&mut self) {
-		let mut buffer = ryu_js::Buffer::new();
-		self.canonicalize_with(&mut buffer)
+		crate::with_canonicalize_buffer(|buf| self.canonicalize_with(buf))
+	}
+}
+
+#[cfg(feature = "canonicalize")]
+thread_local! {
+	static CANONICALIZE_BUFFER: std::cell::RefCell<ryu_js::Buffer> =
+		std::cell::RefCell::new(ryu_js::Buffer::new());
+}
+
+#[cfg(feature = "canonicalize")]
+fn with_canonicalize_buffer<R>(f: impl FnOnce(&mut ryu_js::Buffer) -> R) -> R {
+	let mut slot = Some(f);
+	let result = CANONICALIZE_BUFFER.try_with(|cell| match cell.try_borrow_mut() {
+		Ok(mut buf) => Some((slot.take().unwrap())(&mut buf)),
+		Err(_) => None,
+	});
+
+	match result {
+		Ok(Some(r)) => r,
+		// Either the thread-local was destructed or we hit a re-entrant
+		// borrow. Either way fall back to a fresh buffer.
+		_ => (slot.take().unwrap())(&mut ryu_js::Buffer::new()),
 	}
 }
 

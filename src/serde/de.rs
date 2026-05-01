@@ -113,7 +113,7 @@ impl<'de> Deserialize<'de> for Value {
 			where
 				V: SeqAccess<'de>,
 			{
-				let mut vec = Vec::new();
+				let mut vec = Vec::with_capacity(visitor.size_hint().unwrap_or(0));
 
 				while let Some(elem) = visitor.next_element()? {
 					vec.push(elem);
@@ -184,11 +184,12 @@ impl<'de> Deserialize<'de> for Value {
 							})
 					}
 					Some(MapTag::None(key)) => {
-						let mut object = Object::new();
+						let cap = visitor.size_hint().unwrap_or(0);
+						let mut object = Object::with_capacity(cap);
 
-						object.insert(key, visitor.next_value()?);
+						object.push(key, visitor.next_value()?);
 						while let Some((key, value)) = visitor.next_entry()? {
-							object.insert(key, value);
+							object.push(key, value);
 						}
 
 						Ok(Value::Object(object))
@@ -228,10 +229,11 @@ impl<'de> Deserialize<'de> for Object {
 			where
 				A: MapAccess<'de>,
 			{
-				let mut object = Object::new();
+				let cap = map.size_hint().unwrap_or(0);
+				let mut object = Object::with_capacity(cap);
 
 				while let Some((key, value)) = map.next_entry()? {
-					object.insert(key, value);
+					object.push(key, value);
 				}
 
 				Ok(object)

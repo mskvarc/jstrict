@@ -7,10 +7,11 @@ mod boolean;
 mod null;
 mod number;
 mod object;
+pub(crate) mod slice;
 mod string;
 mod value;
 
-use crate::CodeMap;
+use crate::{CodeMap, Value};
 
 /// Parser options.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
@@ -55,6 +56,34 @@ impl Default for Options {
 	fn default() -> Self {
 		Self::strict()
 	}
+}
+
+/// Parses a [`Value`] from a `&str` without building a [`CodeMap`].
+///
+/// This is the fastest path: the slice parser is monomorphised against
+/// a no-op fragment recorder, so each value is built with zero
+/// `Vec::push` for span tracking.
+pub fn parse_str_value(content: &str) -> Result<Value, Error> {
+	parse_str_value_with(content, Options::default())
+}
+
+/// Like [`parse_str_value`] but with a custom [`Options`].
+pub fn parse_str_value_with(content: &str, options: Options) -> Result<Value, Error> {
+	let (value, _) = slice::parse_value_str_with(content, options, slice::NoOp)?;
+	Ok(value)
+}
+
+/// Parses a [`Value`] from `&[u8]` without building a [`CodeMap`].
+///
+/// See [`parse_str_value`].
+pub fn parse_slice_value(content: &[u8]) -> Result<Value, Error> {
+	parse_slice_value_with(content, Options::default())
+}
+
+/// Like [`parse_slice_value`] but with a custom [`Options`].
+pub fn parse_slice_value_with(content: &[u8], options: Options) -> Result<Value, Error> {
+	let (value, _) = slice::parse_value_slice_with(content, options, slice::NoOp)?;
+	Ok(value)
 }
 
 pub trait Parse: Sized {

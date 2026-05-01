@@ -366,75 +366,95 @@ impl Print for crate::NumberBuf {
 	}
 }
 
+/// Lookup table mapping each ASCII control byte / `"` / `\\` to the
+/// emitted byte length when escaped per RFC 8785. Non-escape bytes map
+/// to 0 so the scanner can detect "needs escaping" with a single
+/// table lookup. Bytes >= 0x20 (excluding `"` and `\\`) are 0.
+static ESCAPE_LEN: [u8; 256] = {
+	let mut t = [0u8; 256];
+	let mut i = 0;
+	while i < 0x20 {
+		t[i] = 6;
+		i += 1;
+	}
+	t[0x08] = 2; // \b
+	t[0x09] = 2; // \t
+	t[0x0a] = 2; // \n
+	t[0x0c] = 2; // \f
+	t[0x0d] = 2; // \r
+	t[b'"' as usize] = 2;
+	t[b'\\' as usize] = 2;
+	t
+};
+
+#[inline(always)]
+fn needs_escape(b: u8) -> bool {
+	ESCAPE_LEN[b as usize] != 0
+}
+
+/// Writes the escape sequence for a single byte that requires escaping.
+fn write_escape(b: u8, f: &mut fmt::Formatter) -> fmt::Result {
+	match b {
+		b'\\' => f.write_str("\\\\"),
+		b'"' => f.write_str("\\\""),
+		0x08 => f.write_str("\\b"),
+		0x09 => f.write_str("\\t"),
+		0x0a => f.write_str("\\n"),
+		0x0c => f.write_str("\\f"),
+		0x0d => f.write_str("\\r"),
+		c => {
+			f.write_str("\\u00")?;
+			let hi = (c >> 4) & 0x0f;
+			let lo = c & 0x0f;
+			f.write_str(&HEX[hi as usize..hi as usize + 1])?;
+			f.write_str(&HEX[lo as usize..lo as usize + 1])
+		}
+	}
+}
+
+const HEX: &str = "0123456789abcdef";
+
 /// Formats a string literal according to [RFC8785](https://www.rfc-editor.org/rfc/rfc8785#name-serialization-of-strings).
 pub fn string_literal(s: &str, f: &mut fmt::Formatter) -> fmt::Result {
-	use fmt::Display;
 	f.write_str("\"")?;
 
-	for c in s.chars() {
-		match c {
-			'\\' => f.write_str("\\\\")?,
-			'\"' => f.write_str("\\\"")?,
-			'\u{0008}' => f.write_str("\\b")?,
-			'\u{0009}' => f.write_str("\\t")?,
-			'\u{000a}' => f.write_str("\\n")?,
-			'\u{000c}' => f.write_str("\\f")?,
-			'\u{000d}' => f.write_str("\\r")?,
-			'\u{0000}'..='\u{001f}' => {
-				f.write_str("\\u")?;
-
-				let codepoint = c as u32;
-				let d = codepoint & 0x000f;
-				let c = (codepoint & 0x00f0) >> 4;
-				let b = (codepoint & 0x0f00) >> 8;
-				let a = (codepoint & 0xf000) >> 12;
-
-				digit(a).fmt(f)?;
-				digit(b).fmt(f)?;
-				digit(c).fmt(f)?;
-				digit(d).fmt(f)?
+	let bytes = s.as_bytes();
+	let mut start = 0;
+	let mut i = 0;
+	while i < bytes.len() {
+		let b = bytes[i];
+		if needs_escape(b) {
+			if start < i {
+				// SAFETY: bytes[start..i] is a prefix-aligned slice of the
+				// original `&str`. Escape bytes are all ASCII, so any
+				// boundary between them lies on a UTF-8 char boundary.
+				let run = unsafe { core::str::from_utf8_unchecked(&bytes[start..i]) };
+				f.write_str(run)?;
 			}
-			_ => c.fmt(f)?,
+			write_escape(b, f)?;
+			i += 1;
+			start = i;
+		} else {
+			i += 1;
 		}
+	}
+	if start < bytes.len() {
+		let run = unsafe { core::str::from_utf8_unchecked(&bytes[start..]) };
+		f.write_str(run)?;
 	}
 
 	f.write_str("\"")
 }
 
-fn digit(c: u32) -> char {
-	match c {
-		0x0 => '0',
-		0x1 => '1',
-		0x2 => '2',
-		0x3 => '3',
-		0x4 => '4',
-		0x5 => '5',
-		0x6 => '6',
-		0x7 => '7',
-		0x8 => '8',
-		0x9 => '9',
-		0xa => 'a',
-		0xb => 'b',
-		0xc => 'c',
-		0xd => 'd',
-		0xe => 'e',
-		0xf => 'f',
-		_ => panic!("invalid input: {}", c),
-	}
-}
-
 /// Returns the byte length of string literal according to [RFC8785](https://www.rfc-editor.org/rfc/rfc8785#name-serialization-of-strings).
 pub fn printed_string_size(s: &str) -> usize {
-	let mut width = 2;
-
-	for c in s.chars() {
-		width += match c {
-			'\\' | '\"' | '\u{0008}' | '\u{0009}' | '\u{000a}' | '\u{000c}' | '\u{000d}' => 2,
-			'\u{0000}'..='\u{001f}' => 6,
-			_ => 1,
-		}
+	let mut width = 2usize;
+	for &b in s.as_bytes() {
+		let n = ESCAPE_LEN[b as usize] as usize;
+		// Non-escape bytes count as 1 (covers all UTF-8 continuation and
+		// leading bytes >= 0x20 except `"` and `\\`).
+		width += if n == 0 { 1 } else { n };
 	}
-
 	width
 }
 

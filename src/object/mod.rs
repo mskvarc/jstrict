@@ -110,8 +110,15 @@ impl Object {
 		Self::default()
 	}
 
+	pub fn with_capacity(capacity: usize) -> Self {
+		Self {
+			entries: Vec::with_capacity(capacity),
+			indexes: IndexMap::with_capacity(capacity),
+		}
+	}
+
 	pub fn from_vec(entries: Vec<Entry>) -> Self {
-		let mut indexes = IndexMap::new();
+		let mut indexes = IndexMap::with_capacity(entries.len());
 		for i in 0..entries.len() {
 			indexes.insert(&entries, i);
 		}
@@ -663,7 +670,8 @@ impl Object {
 	/// all of them are removed and returned in the resulting iterator.
 	/// Otherwise, `None` is returned.
 	pub fn insert(&mut self, key: Key, value: Value) -> Option<RemovedByInsertion> {
-		match self.index_of(&key) {
+		let new_index = self.entries.len();
+		match self.indexes.lookup_or_insert(&self.entries, new_index, &key) {
 			Some(index) => {
 				let mut entry = Entry::new(key, value);
 				core::mem::swap(&mut entry, &mut self.entries[index]);
@@ -674,7 +682,7 @@ impl Object {
 				})
 			}
 			None => {
-				self.push(key, value);
+				self.entries.push(Entry::new(key, value));
 				None
 			}
 		}
@@ -763,8 +771,7 @@ impl Object {
 	/// [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785#name-generation-of-canonical-jso).
 	#[cfg(feature = "canonicalize")]
 	pub fn canonicalize(&mut self) {
-		let mut buffer = ryu_js::Buffer::new();
-		self.canonicalize_with(&mut buffer)
+		crate::with_canonicalize_buffer(|buf| self.canonicalize_with(buf))
 	}
 }
 

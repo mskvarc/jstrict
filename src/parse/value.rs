@@ -70,6 +70,32 @@ impl Parse for Fragment {
 }
 
 impl Parse for Value {
+	fn parse_str(content: &str) -> Result<(Self, crate::CodeMap), Error> {
+		Self::parse_str_with(content, super::Options::default())
+	}
+
+	fn parse_str_with(content: &str, options: super::Options) -> Result<(Self, crate::CodeMap), Error> {
+		let (value, rec) = super::slice::parse_value_str_with(
+			content,
+			options,
+			super::slice::Recording::new(),
+		)?;
+		Ok((value, rec.code_map))
+	}
+
+	fn parse_slice(content: &[u8]) -> Result<(Self, crate::CodeMap), Error> {
+		Self::parse_slice_with(content, super::Options::default())
+	}
+
+	fn parse_slice_with(content: &[u8], options: super::Options) -> Result<(Self, crate::CodeMap), Error> {
+		let (value, rec) = super::slice::parse_value_slice_with(
+			content,
+			options,
+			super::slice::Recording::new(),
+		)?;
+		Ok((value, rec.code_map))
+	}
+
 	fn parse_in<C, E>(
 		parser: &mut Parser<C, E>,
 		context: Context,
