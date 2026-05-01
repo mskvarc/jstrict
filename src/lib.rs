@@ -40,6 +40,7 @@ use smallvec::SmallVec;
 use std::{fmt, str::FromStr};
 
 pub mod array;
+pub(crate) mod byte_scan;
 pub mod code_map;
 pub mod object;
 pub mod parse;
@@ -452,18 +453,7 @@ thread_local! {
 
 #[cfg(feature = "canonicalize")]
 fn with_canonicalize_buffer<R>(f: impl FnOnce(&mut ryu_js::Buffer) -> R) -> R {
-	let mut slot = Some(f);
-	let result = CANONICALIZE_BUFFER.try_with(|cell| match cell.try_borrow_mut() {
-		Ok(mut buf) => Some((slot.take().unwrap())(&mut buf)),
-		Err(_) => None,
-	});
-
-	match result {
-		Ok(Some(r)) => r,
-		// Either the thread-local was destructed or we hit a re-entrant
-		// borrow. Either way fall back to a fresh buffer.
-		_ => (slot.take().unwrap())(&mut ryu_js::Buffer::new()),
-	}
+	CANONICALIZE_BUFFER.with_borrow_mut(f)
 }
 
 impl UnorderedPartialEq for Value {

@@ -68,13 +68,6 @@ impl Mapper for NoOp {
 	fn end_fragment(&mut self, _idx: usize, _end_pos: usize) {}
 }
 
-/// Whether the input is known to be valid UTF-8 already (`parse_str` path).
-#[derive(Clone, Copy)]
-enum InputKind {
-	Utf8Validated,
-	NeedsValidation,
-}
-
 enum StackItem {
 	Array { array: Array, frag: usize },
 	ArrayItem { array: Array, frag: usize },
@@ -97,7 +90,6 @@ pub(crate) struct SliceParser<'a, M: Mapper> {
 	input: &'a [u8],
 	pos: usize,
 	options: Options,
-	kind: InputKind,
 	mapper: M,
 }
 
@@ -110,7 +102,6 @@ pub(crate) fn parse_value_str_with<M: Mapper>(
 		input: input.as_bytes(),
 		pos: 0,
 		options,
-		kind: InputKind::Utf8Validated,
 		mapper,
 	};
 	let value = parser.parse_root()?;
@@ -122,15 +113,11 @@ pub(crate) fn parse_value_slice_with<M: Mapper>(
 	options: Options,
 	mapper: M,
 ) -> Result<(Value, M), Error> {
-	let mut parser = SliceParser {
-		input,
-		pos: 0,
-		options,
-		kind: InputKind::NeedsValidation,
-		mapper,
-	};
-	let value = parser.parse_root()?;
-	Ok((value, parser.mapper))
+	#[cfg(feature = "simdutf8")]
+	let s = simdutf8::basic::from_utf8(input).map_err(|_| Error::InvalidUtf8(0))?;
+	#[cfg(not(feature = "simdutf8"))]
+	let s = core::str::from_utf8(input).map_err(|e| Error::InvalidUtf8(e.valid_up_to()))?;
+	parse_value_str_with(s, options, mapper)
 }
 
 impl<'a, M: Mapper> SliceParser<'a, M> {
@@ -196,46 +183,35 @@ impl<'a, M: Mapper> SliceParser<'a, M> {
 		}
 	}
 
+	#[inline]
 	fn validate_str_slice(&self, start: usize, end: usize) -> Result<&'a str, Error> {
-		match self.kind {
-			InputKind::Utf8Validated => {
-				// SAFETY: input came from a `&str`.
-				Ok(unsafe { core::str::from_utf8_unchecked(&self.input[start..end]) })
-			}
-			InputKind::NeedsValidation => {
-				#[cfg(feature = "simdutf8")]
-				let r = simdutf8::basic::from_utf8(&self.input[start..end]);
-				#[cfg(not(feature = "simdutf8"))]
-				let r = core::str::from_utf8(&self.input[start..end]);
-				r.map_err(|_| Error::InvalidUtf8(start))
-			}
-		}
+		// SAFETY: input is validated as UTF-8 upfront for slice entry points,
+		// or comes from a `&str` directly.
+		Ok(unsafe { core::str::from_utf8_unchecked(&self.input[start..end]) })
 	}
 
 	fn parse_string(&mut self) -> Result<JsonString, Error> {
 		debug_assert_eq!(self.input.get(self.pos), Some(&b'"'));
 		self.pos += 1;
 		let start = self.pos;
-
 		let bytes = self.input;
-		let mut i = start;
-		while i < bytes.len() {
-			let b = bytes[i];
-			if b == b'"' {
-				let s = self.validate_str_slice(start, i)?;
-				let out = JsonString::from_str(s);
-				self.pos = i + 1;
-				return Ok(out);
+		match memchr::memchr2(b'"', b'\\', &bytes[start..]) {
+			Some(off) => {
+				let end = start + off;
+				if let Some(bad) = crate::byte_scan::find_lt_0x20(&bytes[start..end]) {
+					return Err(self.unexpected_at(start + bad));
+				}
+				if bytes[end] == b'"' {
+					let s = self.validate_str_slice(start, end)?;
+					let out = JsonString::from_str(s);
+					self.pos = end + 1;
+					Ok(out)
+				} else {
+					self.parse_string_with_escapes(start, end)
+				}
 			}
-			if b == b'\\' {
-				return self.parse_string_with_escapes(start, i);
-			}
-			if b < 0x20 {
-				return Err(self.unexpected_at(i));
-			}
-			i += 1;
+			None => Err(Error::Unexpected(bytes.len(), None)),
 		}
-		Err(Error::Unexpected(bytes.len(), None))
 	}
 
 	fn parse_string_with_escapes(
@@ -254,16 +230,11 @@ impl<'a, M: Mapper> SliceParser<'a, M> {
 		loop {
 			let run_start = self.pos;
 			let bytes = self.input;
-			let mut j = run_start;
-			let mut hit: Option<u8> = None;
-			while j < bytes.len() {
-				let b = bytes[j];
-				if b == b'"' || b == b'\\' || b < 0x20 {
-					hit = Some(b);
-					break;
-				}
-				j += 1;
-			}
+			let (j, hit): (usize, Option<u8>) =
+				match crate::byte_scan::find_escape(&bytes[run_start..]) {
+					Some(off) => (run_start + off, Some(bytes[run_start + off])),
+					None => (bytes.len(), None),
+				};
 			if j > run_start {
 				if let Some((p_high, high)) = high_surrogate.take() {
 					if self.options.accept_truncated_surrogate_pair {
@@ -412,6 +383,48 @@ impl<'a, M: Mapper> SliceParser<'a, M> {
 
 	fn parse_number(&mut self, ctx: super::Context) -> Result<NumberBuf, Error> {
 		let start = self.pos;
+		let bytes = self.input;
+		let mut i = start;
+		if bytes.get(i) == Some(&b'-') {
+			i += 1;
+		}
+		match bytes.get(i) {
+			Some(&b'0') => {
+				i += 1;
+			}
+			Some(b) if (b'1'..=b'9').contains(b) => {
+				i += 1;
+				while let Some(&b) = bytes.get(i) {
+					if !b.is_ascii_digit() {
+						break;
+					}
+					i += 1;
+				}
+			}
+			_ => return Err(Error::Unexpected(i, self.char_at(i))),
+		}
+		if matches!(bytes.get(i), Some(&b'.') | Some(&b'e') | Some(&b'E')) {
+			return self.parse_number_slow(ctx, start);
+		}
+		let term_ok = match bytes.get(i) {
+			None => true,
+			Some(&c) => ctx.follows(c as char),
+		};
+		if !term_ok {
+			return Err(Error::Unexpected(i, self.char_at(i)));
+		}
+		self.pos = i;
+		let buf: smallvec::SmallVec<[u8; crate::SMALL_STRING_CAPACITY]> =
+			smallvec::SmallVec::from_slice(&bytes[start..i]);
+		// SAFETY: the fast path consumed a valid JSON integer.
+		Ok(unsafe { NumberBuf::new_unchecked(buf) })
+	}
+
+	fn parse_number_slow(
+		&mut self,
+		ctx: super::Context,
+		start: usize,
+	) -> Result<NumberBuf, Error> {
 		let bytes = self.input;
 		let mut i = start;
 
@@ -591,9 +604,8 @@ impl<'a, M: Mapper> SliceParser<'a, M> {
 		if self.peek() != Some(b'"') {
 			return Err(self.unexpected_at(self.pos));
 		}
-		let s = self.parse_string()?;
+		let key: Key = self.parse_string()?;
 		self.mapper.end_fragment(key_frag, self.pos);
-		let key: Key = Key::from_str(&s);
 		self.skip_whitespace();
 		match self.next_byte()? {
 			(_, b':') => Ok((key, entry_frag)),
@@ -602,7 +614,7 @@ impl<'a, M: Mapper> SliceParser<'a, M> {
 	}
 
 	fn parse_root(&mut self) -> Result<Value, Error> {
-		let mut stack: Vec<StackItem> = Vec::new();
+		let mut stack: Vec<StackItem> = Vec::with_capacity(8);
 		let mut value: Option<Value> = None;
 
 		loop {

@@ -387,11 +387,6 @@ static ESCAPE_LEN: [u8; 256] = {
 	t
 };
 
-#[inline(always)]
-fn needs_escape(b: u8) -> bool {
-	ESCAPE_LEN[b as usize] != 0
-}
-
 /// Writes the escape sequence for a single byte that requires escaping.
 fn write_escape(b: u8, f: &mut fmt::Formatter) -> fmt::Result {
 	match b {
@@ -420,23 +415,17 @@ pub fn string_literal(s: &str, f: &mut fmt::Formatter) -> fmt::Result {
 
 	let bytes = s.as_bytes();
 	let mut start = 0;
-	let mut i = 0;
-	while i < bytes.len() {
-		let b = bytes[i];
-		if needs_escape(b) {
-			if start < i {
-				// SAFETY: bytes[start..i] is a prefix-aligned slice of the
-				// original `&str`. Escape bytes are all ASCII, so any
-				// boundary between them lies on a UTF-8 char boundary.
-				let run = unsafe { core::str::from_utf8_unchecked(&bytes[start..i]) };
-				f.write_str(run)?;
-			}
-			write_escape(b, f)?;
-			i += 1;
-			start = i;
-		} else {
-			i += 1;
+	while let Some(off) = crate::byte_scan::find_escape(&bytes[start..]) {
+		let i = start + off;
+		if start < i {
+			// SAFETY: bytes[start..i] is a prefix-aligned slice of the
+			// original `&str`. Escape bytes are all ASCII, so any
+			// boundary between them lies on a UTF-8 char boundary.
+			let run = unsafe { core::str::from_utf8_unchecked(&bytes[start..i]) };
+			f.write_str(run)?;
 		}
+		write_escape(bytes[i], f)?;
+		start = i + 1;
 	}
 	if start < bytes.len() {
 		let run = unsafe { core::str::from_utf8_unchecked(&bytes[start..]) };
