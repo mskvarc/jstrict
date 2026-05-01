@@ -9,8 +9,7 @@
 //! - Strict implementation of [RFC 8259](https://datatracker.ietf.org/doc/html/rfc8259) and
 //!   [ECMA-404](https://www.ecma-international.org/publications-and-standards/standards/ecma-404/).
 //! - No stack overflow, your memory is the limit.
-//! - Numbers are stored in lexical form thanks to the [`json-number`](https://crates.io/crates/json-number) crate,
-//!   their precision is not limited.
+//! - Numbers are stored in lexical form, their precision is not limited.
 //! - Duplicate values are preserved. A JSON object is just a list of entries,
 //!   in the order of definition.
 //! - Strings are stored on the stack whenever possible, thanks to the [`smallstr`](https://crates.io/crates/smallstr) crate.
@@ -35,7 +34,8 @@
 //! let mut value = Value::parse_str(&input).expect("parse error").0;
 //! println!("value: {}", value.pretty_print());
 //! ```
-pub use json_number::{InvalidNumber, Number};
+pub mod number;
+pub use crate::number::{InvalidNumber, Number, Sign, TryFromFloatError};
 use smallvec::SmallVec;
 use std::{fmt, str::FromStr};
 
@@ -54,10 +54,6 @@ mod convert;
 mod macros;
 mod try_from;
 pub use try_from::*;
-
-pub mod number {
-	pub use json_number::Buffer;
-}
 
 #[cfg(feature = "serde")]
 mod serde;
@@ -87,7 +83,7 @@ pub use object::Object;
 pub const NUMBER_CAPACITY: usize = SMALL_STRING_CAPACITY;
 
 /// Number buffer.
-pub type NumberBuf = json_number::SmallNumberBuf<NUMBER_CAPACITY>;
+pub type NumberBuf = crate::number::SmallNumberBuf<NUMBER_CAPACITY>;
 
 /// JSON Value.
 ///
@@ -581,7 +577,7 @@ macro_rules! try_from_float {
 	($($ty:ident),*) => {
 		$(
 			impl TryFrom<$ty> for Value {
-				type Error = json_number::TryFromFloatError;
+				type Error = crate::number::TryFromFloatError;
 
 				fn try_from(n: $ty) -> Result<Self, Self::Error> {
 					Ok(Value::Number(n.try_into()?))

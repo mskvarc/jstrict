@@ -177,8 +177,8 @@ impl<'de> Deserialize<'de> for Value {
 						let value: String = visitor.next_value()?;
 						NumberBuf::new(value.into_bytes().into())
 							.map(Value::Number)
-							.map_err(|json_number::InvalidNumber(bytes)| {
-								serde::de::Error::custom(json_number::InvalidNumber(
+							.map_err(|crate::number::InvalidNumber(bytes)| {
+								serde::de::Error::custom(crate::number::InvalidNumber(
 									String::from_utf8(bytes.into_vec()).unwrap(),
 								))
 							})
@@ -267,8 +267,8 @@ impl fmt::Display for DeserializeError {
 	}
 }
 
-impl From<json_number::serde::Unexpected> for DeserializeError {
-	fn from(value: json_number::serde::Unexpected) -> Self {
+impl From<crate::number::serde::Unexpected> for DeserializeError {
+	fn from(value: crate::number::serde::Unexpected) -> Self {
 		Self::Custom(value.to_string())
 	}
 }

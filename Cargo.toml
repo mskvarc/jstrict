@@ -13,19 +13,19 @@ readme = "README.md"
 rust-version = "1.71.0"
 
 [features]
-default = [ "simdutf8" ]
+default = ["simdutf8"]
 
 ## JSON Canonicalization Scheme (JCS) implementation.
-canonicalize = [ "ryu-js", "json-number/canonical" ]
+canonicalize = ["ryu-js"]
 
 ## Serialization/Deserialization support using `serde`.
-serde = [ "dep:serde", "json-number/serde", "smallstr/serde" ]
+serde = ["dep:serde", "smallstr/serde"]
 
 ## Compatibility layer with the `serde_json` crate.
-serde_json = [ "dep:serde_json", "json-number/serde_json" ]
+serde_json = ["dep:serde_json"]
 
 ## SIMD-accelerated UTF-8 validation in the slice parser.
-simdutf8 = [ "dep:simdutf8" ]
+simdutf8 = ["dep:simdutf8"]
 
 [package.metadata.docs.rs]
 all-features = true
@@ -34,7 +34,7 @@ all-features = true
 bench = false
 
 [dependencies]
-json-number = { version = "0.4", features = [ "smallnumberbuf" ] }
+lexical = { version = "7.0.5", features = ["format"] }
 smallvec = "1.9"
 smallstr = "0.3"
 locspan = "0.8.2"
@@ -50,9 +50,9 @@ simdutf8 = { version = "0.1", optional = true }
 utf8-decode = "1.0.1"
 
 [dev-dependencies]
-serde = { version = "1.0", features = [ "derive" ] }
+serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-criterion = { version = "0.8.2", features = [ "html_reports" ] }
+criterion = { version = "0.8.2", features = ["html_reports"] }
 ryu-js = "0.2.2"
 
 [[example]]
