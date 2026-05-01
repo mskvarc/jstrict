@@ -409,30 +409,54 @@ fn write_escape(b: u8, f: &mut fmt::Formatter) -> fmt::Result {
 
 const HEX: &str = "0123456789abcdef";
 
+/// Threshold (in bytes) below which `string_literal` walks the SWAR path
+/// directly. Above it, the SIMD escape encoder is used. Tuned so the SIMD
+/// startup cost (thread-local borrow + reserve) does not dominate.
+const SIMD_ESCAPE_MIN: usize = 64;
+
+thread_local! {
+	static ESCAPE_BUFFER: std::cell::RefCell<Vec<u8>> =
+		std::cell::RefCell::new(Vec::with_capacity(256));
+}
+
 /// Formats a string literal according to [RFC8785](https://www.rfc-editor.org/rfc/rfc8785#name-serialization-of-strings).
 pub fn string_literal(s: &str, f: &mut fmt::Formatter) -> fmt::Result {
-	f.write_str("\"")?;
-
 	let bytes = s.as_bytes();
-	let mut start = 0;
-	while let Some(off) = crate::byte_scan::find_escape(&bytes[start..]) {
-		let i = start + off;
-		if start < i {
-			// SAFETY: bytes[start..i] is a prefix-aligned slice of the
-			// original `&str`. Escape bytes are all ASCII, so any
-			// boundary between them lies on a UTF-8 char boundary.
-			let run = unsafe { core::str::from_utf8_unchecked(&bytes[start..i]) };
+	if bytes.len() < SIMD_ESCAPE_MIN {
+		f.write_str("\"")?;
+		let mut start = 0;
+		while let Some(off) = crate::byte_scan::find_escape(&bytes[start..]) {
+			let i = start + off;
+			if start < i {
+				// SAFETY: bytes[start..i] is a prefix-aligned slice of the
+				// original `&str`. Escape bytes are all ASCII, so any
+				// boundary between them lies on a UTF-8 char boundary.
+				let run = unsafe { core::str::from_utf8_unchecked(&bytes[start..i]) };
+				f.write_str(run)?;
+			}
+			write_escape(bytes[i], f)?;
+			start = i + 1;
+		}
+		if start < bytes.len() {
+			let run = unsafe { core::str::from_utf8_unchecked(&bytes[start..]) };
 			f.write_str(run)?;
 		}
-		write_escape(bytes[i], f)?;
-		start = i + 1;
+		f.write_str("\"")
+	} else {
+		ESCAPE_BUFFER.with_borrow_mut(|buf| {
+			buf.clear();
+			// `format_string` panics if the destination is undersized; the
+			// worst case is 6 bytes per input byte plus the surrounding
+			// quotes and a SIMD overshoot margin.
+			buf.reserve(s.len() * 6 + 32 + 3);
+			json_escape_simd::escape_into(s, buf);
+			// SAFETY: `escape_into` writes only ASCII escape sequences and
+			// the original UTF-8 source bytes. The two surrounding `"` and
+			// any escape bytes are ASCII, and untouched runs of input are
+			// already valid UTF-8.
+			f.write_str(unsafe { core::str::from_utf8_unchecked(buf) })
+		})
 	}
-	if start < bytes.len() {
-		let run = unsafe { core::str::from_utf8_unchecked(&bytes[start..]) };
-		f.write_str(run)?;
-	}
-
-	f.write_str("\"")
 }
 
 /// Returns the byte length of string literal according to [RFC8785](https://www.rfc-editor.org/rfc/rfc8785#name-serialization-of-strings).

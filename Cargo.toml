@@ -1,6 +1,6 @@
 [package]
 name = "json-syntax"
-version = "0.12.5"
+version = "0.13.0"
 edition = "2021"
 authors = ["Timothée Haudebourg <author@haudebourg.net>"]
 description = "Strict JSON parsing and mapping library"
@@ -10,7 +10,7 @@ repository = "https://github.com/timothee-haudebourg/json-syntax"
 documentation = "https://docs.rs/json-syntax"
 license = "MIT/Apache-2.0"
 readme = "README.md"
-rust-version = "1.71.0"
+rust-version = "1.85.0"
 
 [features]
 default = ["simdutf8"]
@@ -42,6 +42,7 @@ locspan-derive = "0.6"
 decoded-char = "0.1"
 hashbrown = "0.17"
 memchr = "2.7"
+json-escape-simd = "3.0"
 contextual = { version = "0.1.1", optional = true }
 ryu-js = { version = "0.2.2", optional = true }
 serde = { version = "1.0", optional = true }

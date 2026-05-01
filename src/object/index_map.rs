@@ -23,27 +23,37 @@ where
 	move |indexes| k.equivalent(&entries[indexes.rep].key)
 }
 
-fn make_hasher<'a, S>(entries: &'a [Entry], hash_builder: &'a S) -> impl 'a + Fn(&Indexes) -> u64
-where
-	S: BuildHasher,
-{
-	move |indexes| hash_builder.hash_one(&entries[indexes.rep].key)
+fn make_hasher() -> impl Fn(&Indexes) -> u64 {
+	|indexes| indexes.hash
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct Indexes {
 	/// Index of the first entry with the considered key (the representative).
 	rep: usize,
 
 	/// Other indexes with this key.
 	other: Vec<usize>,
+
+	/// Cached hash of the key shared by every index in this slot. Used by
+	/// `make_hasher` so table grow does not re-hash keys.
+	hash: u64,
 }
 
+impl PartialEq for Indexes {
+	fn eq(&self, other: &Self) -> bool {
+		self.rep == other.rep && self.other == other.other
+	}
+}
+
+impl Eq for Indexes {}
+
 impl Indexes {
-	fn new(rep: usize) -> Self {
+	fn new(rep: usize, hash: u64) -> Self {
 		Self {
 			rep,
 			other: Vec::new(),
+			hash,
 		}
 	}
 
@@ -199,17 +209,16 @@ impl<S: BuildHasher> IndexMap<S> {
 	pub fn insert(&mut self, entries: &[Entry], index: usize) -> bool {
 		let key = &entries[index].key;
 		let hash = self.hash_builder.hash_one(key);
-		match self.table.entry(
-			hash,
-			equivalent_key(entries, key),
-			make_hasher::<S>(entries, &self.hash_builder),
-		) {
+		match self
+			.table
+			.entry(hash, equivalent_key(entries, key), make_hasher())
+		{
 			TableEntry::Occupied(mut occupied) => {
 				occupied.get_mut().insert(index);
 				false
 			}
 			TableEntry::Vacant(vacant) => {
-				vacant.insert(Indexes::new(index));
+				vacant.insert(Indexes::new(index, hash));
 				true
 			}
 		}
@@ -230,14 +239,13 @@ impl<S: BuildHasher> IndexMap<S> {
 		Q: ?Sized + Hash + Equivalent<Key>,
 	{
 		let hash = self.hash_builder.hash_one(key);
-		match self.table.entry(
-			hash,
-			equivalent_key(entries, key),
-			make_hasher::<S>(entries, &self.hash_builder),
-		) {
+		match self
+			.table
+			.entry(hash, equivalent_key(entries, key), make_hasher())
+		{
 			TableEntry::Occupied(occupied) => Some(occupied.get().first()),
 			TableEntry::Vacant(vacant) => {
-				vacant.insert(Indexes::new(new_index));
+				vacant.insert(Indexes::new(new_index, hash));
 				None
 			}
 		}
