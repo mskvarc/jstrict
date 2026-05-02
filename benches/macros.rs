@@ -34,7 +34,7 @@ fn bench_macros(c: &mut Criterion) {
 	c.bench_function("macros/interpolated", |b| {
 		let id: u64 = 42;
 		let name = "alice";
-		let scores = vec![1.0_f64, 2.0, 3.0];
+		let scores = [1.0_f64, 2.0, 3.0];
 		b.iter(|| {
 			let scores_v: Vec<Value> =
 				scores.iter().map(|x| Value::try_from(*x).unwrap()).collect();

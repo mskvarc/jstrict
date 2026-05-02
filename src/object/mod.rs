@@ -71,7 +71,7 @@ impl<K, V> Entry<K, V> {
 }
 
 impl Entry {
-	pub fn get_fragment(&self, index: usize) -> Result<FragmentRef, usize> {
+	pub fn get_fragment(&self, index: usize) -> Result<FragmentRef<'_>, usize> {
 		match index {
 			0 => Ok(FragmentRef::Entry(self)),
 			1 => Ok(FragmentRef::Key(&self.key)),
@@ -138,7 +138,7 @@ impl Object {
 		self.entries.is_empty()
 	}
 
-	pub fn get_fragment(&self, mut index: usize) -> Result<FragmentRef, usize> {
+	pub fn get_fragment(&self, mut index: usize) -> Result<FragmentRef<'_>, usize> {
 		for e in &self.entries {
 			match e.get_fragment(index) {
 				Ok(value) => return Ok(value),
@@ -153,11 +153,11 @@ impl Object {
 		&self.entries
 	}
 
-	pub fn iter(&self) -> Iter {
+	pub fn iter(&self) -> Iter<'_> {
 		self.entries.iter()
 	}
 
-	pub fn iter_mut(&mut self) -> IterMut {
+	pub fn iter_mut(&mut self) -> IterMut<'_> {
 		IterMut(self.entries.iter_mut())
 	}
 
@@ -182,7 +182,7 @@ impl Object {
 	/// Returns an iterator over the values matching the given key.
 	///
 	/// Runs in `O(1)` (average).
-	pub fn get<Q>(&self, key: &Q) -> Values
+	pub fn get<Q>(&self, key: &Q) -> Values<'_>
 	where
 		Q: ?Sized + Hash + Equivalent<Key>,
 	{
@@ -200,7 +200,7 @@ impl Object {
 	/// Returns an iterator over the values matching the given key.
 	///
 	/// Runs in `O(1)` (average).
-	pub fn get_mut<Q>(&mut self, key: &Q) -> ValuesMut
+	pub fn get_mut<Q>(&mut self, key: &Q) -> ValuesMut<'_>
 	where
 		Q: ?Sized + Hash + Equivalent<Key>,
 	{
@@ -265,7 +265,7 @@ impl Object {
 	/// Returns an iterator over the entries matching the given key.
 	///
 	/// Runs in `O(1)` (average).
-	pub fn get_entries<Q>(&self, key: &Q) -> Entries
+	pub fn get_entries<Q>(&self, key: &Q) -> Entries<'_>
 	where
 		Q: ?Sized + Hash + Equivalent<Key>,
 	{
@@ -303,7 +303,7 @@ impl Object {
 	/// Returns an iterator over the values matching the given key.
 	///
 	/// Runs in `O(1)` (average).
-	pub fn get_with_index<Q>(&self, key: &Q) -> ValuesWithIndex
+	pub fn get_with_index<Q>(&self, key: &Q) -> ValuesWithIndex<'_>
 	where
 		Q: ?Sized + Hash + Equivalent<Key>,
 	{
@@ -321,7 +321,7 @@ impl Object {
 	/// Returns an iterator over the entries matching the given key.
 	///
 	/// Runs in `O(1)` (average).
-	pub fn get_entries_with_index<Q>(&self, key: &Q) -> EntriesWithIndex
+	pub fn get_entries_with_index<Q>(&self, key: &Q) -> EntriesWithIndex<'_>
 	where
 		Q: ?Sized + Hash + Equivalent<Key>,
 	{
@@ -393,7 +393,7 @@ impl Object {
 			.and_then(index_map::Indexes::redundant)
 	}
 
-	pub fn indexes_of<Q>(&self, key: &Q) -> Indexes
+	pub fn indexes_of<Q>(&self, key: &Q) -> Indexes<'_>
 	where
 		Q: ?Sized + Hash + Equivalent<Key>,
 	{
@@ -439,7 +439,7 @@ impl Object {
 		code_map: &CodeMap,
 		offset: usize,
 		key: &Q,
-	) -> Result<Option<MappedEntry>, Duplicate<MappedEntry>>
+	) -> Result<Option<MappedEntry<'_>>, Duplicate<MappedEntry<'_>>>
 	where
 		Q: ?Sized + Hash + Equivalent<Key>,
 	{
@@ -491,7 +491,7 @@ impl Object {
 		code_map: &CodeMap,
 		offset: usize,
 		key: &Q,
-	) -> Result<Option<IndexedMappedEntry>, Duplicate<IndexedMappedEntry>>
+	) -> Result<Option<IndexedMappedEntry<'_>>, Duplicate<IndexedMappedEntry<'_>>>
 	where
 		Q: ?Sized + Hash + Equivalent<Key>,
 	{
@@ -594,7 +594,7 @@ impl Object {
 		code_map: &CodeMap,
 		offset: usize,
 		key: &Q,
-	) -> Result<Option<IndexedMappedValue>, Duplicate<IndexedMappedValue>>
+	) -> Result<Option<IndexedMappedValue<'_>>, Duplicate<IndexedMappedValue<'_>>>
 	where
 		Q: ?Sized + Hash + Equivalent<Key>,
 	{
@@ -669,7 +669,7 @@ impl Object {
 	/// If one or more entries are already matching the given key,
 	/// all of them are removed and returned in the resulting iterator.
 	/// Otherwise, `None` is returned.
-	pub fn insert(&mut self, key: Key, value: Value) -> Option<RemovedByInsertion> {
+	pub fn insert(&mut self, key: Key, value: Value) -> Option<RemovedByInsertion<'_>> {
 		let new_index = self.entries.len();
 		match self.indexes.lookup_or_insert(&self.entries, new_index, &key) {
 			Some(index) => {
@@ -692,7 +692,7 @@ impl Object {
 	///
 	/// If one or more entries are already matching the given key,
 	/// all of them are removed and returned in the resulting iterator.
-	pub fn insert_front(&mut self, key: Key, value: Value) -> RemovedByInsertFront {
+	pub fn insert_front(&mut self, key: Key, value: Value) -> RemovedByInsertFront<'_> {
 		if let Some(first) = self.entries.first_mut() {
 			if first.key == key {
 				let first = core::mem::replace(first, Entry::new(key, value));
@@ -725,6 +725,7 @@ impl Object {
 	/// Returns an error if multiple entries match the key.
 	///
 	/// Runs in `O(n)` time (average).
+	#[allow(clippy::result_large_err)]
 	pub fn remove_unique<Q>(&mut self, key: &Q) -> Result<Option<Entry>, Duplicate<Entry>>
 	where
 		Q: ?Sized + Hash + Equivalent<Key>,
@@ -848,7 +849,7 @@ impl UnorderedEq for Object {}
 
 impl PartialOrd for Object {
 	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-		Some(self.entries.cmp(&other.entries))
+		Some(self.cmp(other))
 	}
 }
 
@@ -937,19 +938,16 @@ impl FromIterator<(Key, Value)> for Object {
 	}
 }
 
+#[derive(Default)]
 pub enum Indexes<'a> {
 	Some {
 		first: Option<usize>,
 		other: core::slice::Iter<'a, usize>,
 	},
-	None,
+	#[default]
+ None,
 }
 
-impl<'a> Default for Indexes<'a> {
-	fn default() -> Self {
-		Self::None
-	}
-}
 
 impl<'a> Iterator for Indexes<'a> {
 	type Item = usize;

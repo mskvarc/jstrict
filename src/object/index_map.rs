@@ -136,7 +136,7 @@ impl Indexes {
 		}
 	}
 
-	pub fn iter(&self) -> super::Indexes {
+	pub fn iter(&self) -> super::Indexes<'_> {
 		super::Indexes::Some {
 			first: Some(self.rep),
 			other: self.other.iter(),

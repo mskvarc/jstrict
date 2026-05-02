@@ -25,7 +25,7 @@ impl CodeMap {
 		self.0.get_mut(i)
 	}
 
-	pub fn iter(&self) -> Iter {
+	pub fn iter(&self) -> Iter<'_> {
 		self.0.iter().enumerate()
 	}
 }

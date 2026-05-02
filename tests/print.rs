@@ -134,10 +134,9 @@ fn manual_escape(s: &str) -> String {
 			}
 			_ => {
 				// UTF-8 leading byte: copy the whole code point.
-				let n = if b < 0x80 {
+				// 0x80..0xc0 shouldn't occur in valid UTF-8 leading position; treat as 1.
+				let n = if b < 0xc0 {
 					1
-				} else if b < 0xc0 {
-					1 // shouldn't happen in valid UTF-8 leading position
 				} else if b < 0xe0 {
 					2
 				} else if b < 0xf0 {

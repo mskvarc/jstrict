@@ -169,7 +169,7 @@ pub enum Value {
 	Object(Object),
 }
 
-pub fn get_array_fragment(array: &[Value], mut index: usize) -> Result<FragmentRef, usize> {
+pub fn get_array_fragment(array: &[Value], mut index: usize) -> Result<FragmentRef<'_>, usize> {
 	for v in array {
 		match v.get_fragment(index) {
 			Ok(value) => return Ok(value),
@@ -181,7 +181,7 @@ pub fn get_array_fragment(array: &[Value], mut index: usize) -> Result<FragmentR
 }
 
 impl Value {
-	pub fn get_fragment(&self, index: usize) -> Result<FragmentRef, usize> {
+	pub fn get_fragment(&self, index: usize) -> Result<FragmentRef<'_>, usize> {
 		if index == 0 {
 			Ok(FragmentRef::Value(self))
 		} else {
@@ -388,7 +388,7 @@ impl Value {
 		}
 	}
 
-	pub fn traverse(&self) -> Traverse {
+	pub fn traverse(&self) -> Traverse<'_> {
 		let mut stack = SmallVec::new();
 		stack.push(FragmentRef::Value(self));
 		Traverse { offset: 0, stack }

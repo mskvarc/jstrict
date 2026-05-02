@@ -180,7 +180,7 @@ impl Number {
 	/// The `data` input **must** be a valid JSON number.
 	#[inline(always)]
 	pub unsafe fn new_unchecked<B: AsRef<[u8]> + ?Sized>(data: &B) -> &Number {
-		std::mem::transmute(data.as_ref())
+		unsafe { std::mem::transmute(data.as_ref()) }
 	}
 
 	#[inline(always)]
