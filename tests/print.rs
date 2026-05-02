@@ -1,4 +1,4 @@
-use json_syntax::{json, Parse, Print};
+use jstrict::{json, Parse, Print};
 
 #[test]
 fn print_01() {
@@ -170,13 +170,13 @@ fn print_simd_all_controls() {
 	s.push_str("padding to push past SIMD threshold padding padding padding");
 	assert!(s.len() >= 64);
 
-	let value = json_syntax::Value::String(s.clone().into());
+	let value = jstrict::Value::String(s.clone().into());
 	let printed = value.compact_print().to_string();
 	let expected = manual_escape(&s);
 	assert_eq!(printed, expected);
 
 	// Round-trip.
-	let (parsed, _) = json_syntax::Value::parse_str(&printed).unwrap();
+	let (parsed, _) = jstrict::Value::parse_str(&printed).unwrap();
 	assert_eq!(parsed, value);
 }
 
@@ -191,10 +191,10 @@ fn print_simd_threshold_boundary() {
 	assert_eq!(s63.len(), 63);
 	assert_eq!(s64.len(), 64);
 
-	let p63 = json_syntax::Value::String(s63.clone().into())
+	let p63 = jstrict::Value::String(s63.clone().into())
 		.compact_print()
 		.to_string();
-	let p64 = json_syntax::Value::String(s64.clone().into())
+	let p64 = jstrict::Value::String(s64.clone().into())
 		.compact_print()
 		.to_string();
 

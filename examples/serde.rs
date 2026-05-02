@@ -1,7 +1,7 @@
-//! This example shows how to serialize and deserialize `json_syntax::Value`
+//! This example shows how to serialize and deserialize `jstrict::Value`
 //! using the `serde` crate. This will not allow you to attach metadata to each
 //! value fragment (the `M` type will be unit `()`).
-use json_syntax::Print;
+use jstrict::Print;
 
 #[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 struct MyType {
@@ -17,13 +17,13 @@ fn main() {
 	};
 
 	// Serialize `a` into a JSON value.
-	let json = json_syntax::to_value(&a).expect("serialization failed");
+	let json = jstrict::to_value(&a).expect("serialization failed");
 
 	// Print the value.
 	println!("{}", json.pretty_print());
 
 	// Deserialize JSON back into `MyType`.
-	let b: MyType = json_syntax::from_value(json).expect("deserialization failed");
+	let b: MyType = jstrict::from_value(json).expect("deserialization failed");
 
 	// The round-trip should not change the actual data.
 	assert_eq!(a, b)

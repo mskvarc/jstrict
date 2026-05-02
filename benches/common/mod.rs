@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use json_syntax::{CodeMap, Parse, Value};
+use jstrict::{CodeMap, Parse, Value};
 use std::fmt::Write as _;
 
 pub const SEED: u64 = 0xC0FFEE;

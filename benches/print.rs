@@ -1,9 +1,9 @@
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use std::hint::black_box;
-use json_syntax::{
-	print::{Indent, Limit, Options as PrintOptions},
+use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
+use jstrict::{
 	Parse, Print, Value,
+	print::{Indent, Limit, Options as PrintOptions},
 };
+use std::hint::black_box;
 
 mod common;
 
@@ -37,9 +37,13 @@ fn bench_print(c: &mut Criterion) {
 		let mut group = c.benchmark_group(format!("print/{}", name));
 
 		group.throughput(Throughput::Bytes(compact_size));
-		group.bench_with_input(BenchmarkId::new("json_syntax", "compact"), &value, |b, v| {
-			b.iter(|| black_box(v).compact_print().to_string());
-		});
+		group.bench_with_input(
+			BenchmarkId::new("json_syntax", "compact"),
+			&value,
+			|b, v| {
+				b.iter(|| black_box(v).compact_print().to_string());
+			},
+		);
 		group.bench_with_input(BenchmarkId::new("json_syntax", "inline"), &value, |b, v| {
 			b.iter(|| black_box(v).inline_print().to_string());
 		});
@@ -49,13 +53,9 @@ fn bench_print(c: &mut Criterion) {
 			b.iter(|| black_box(v).pretty_print().to_string());
 		});
 		let custom = custom_options();
-		group.bench_with_input(
-			BenchmarkId::new("json_syntax", "custom"),
-			&value,
-			|b, v| {
-				b.iter(|| black_box(v).print_with(custom.clone()).to_string());
-			},
-		);
+		group.bench_with_input(BenchmarkId::new("json_syntax", "custom"), &value, |b, v| {
+			b.iter(|| black_box(v).print_with(custom.clone()).to_string());
+		});
 
 		group.throughput(Throughput::Bytes(compact_size));
 		group.bench_with_input(

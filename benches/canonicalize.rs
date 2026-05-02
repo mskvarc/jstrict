@@ -1,6 +1,6 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use std::hint::black_box;
-use json_syntax::{Parse, Print, Value};
+use jstrict::{Parse, Print, Value};
 
 mod common;
 

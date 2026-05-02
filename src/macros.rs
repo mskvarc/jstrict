@@ -1,7 +1,7 @@
-/// Constructs a `json_syntax::Value` from a JSON literal.
+/// Constructs a `jstrict::Value` from a JSON literal.
 ///
 /// ```
-/// # use json_syntax::{Value, json};
+/// # use jstrict::{Value, json};
 /// let value = json!({
 ///     "code": 200,
 ///     "success": true,
@@ -17,7 +17,7 @@
 /// Variables or expressions can be interpolated into the JSON literal.
 ///
 /// ```
-/// # use json_syntax::{Value, object::Key, json};
+/// # use jstrict::{Value, object::Key, json};
 /// let code = 200;
 /// let features = vec!["json", "syntax"];
 ///
@@ -33,7 +33,7 @@
 /// Trailing commas are allowed inside both arrays and objects.
 ///
 /// ```
-/// # use json_syntax::{Value, json};
+/// # use jstrict::{Value, json};
 /// let value = json!([
 ///     "notice",
 ///     "the",

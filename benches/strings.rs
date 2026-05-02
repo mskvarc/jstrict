@@ -1,6 +1,6 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use std::hint::black_box;
-use json_syntax::{parse::Options, Parse, Value};
+use jstrict::{parse::Options, Parse, Value};
 
 mod common;
 

@@ -1,6 +1,6 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use std::hint::black_box;
-use json_syntax::{json, Value};
+use jstrict::{json, Value};
 
 fn bench_macros(c: &mut Criterion) {
 	c.bench_function("macros/simple", |b| {

@@ -28,7 +28,7 @@
 //!
 //! ```
 //! use std::fs;
-//! use json_syntax::{Value, Parse, Print};
+//! use jstrict::{Value, Parse, Print};
 //!
 //! let filename = "tests/inputs/y_structure_500_nested_arrays.json";
 //! let input = fs::read_to_string(filename).unwrap();
@@ -97,7 +97,7 @@ pub type NumberBuf = crate::number::SmallNumberBuf<NUMBER_CAPACITY>;
 /// ## Example
 ///
 /// ```
-/// use json_syntax::{Value, Parse, CodeMap};
+/// use jstrict::{Value, Parse, CodeMap};
 /// let (value, code_map) = Value::parse_str("{ \"key\": \"value\" }").unwrap();
 /// ```
 ///
@@ -119,7 +119,7 @@ pub type NumberBuf = crate::number::SmallNumberBuf<NUMBER_CAPACITY>;
 /// ## Example
 ///
 /// ```
-/// use json_syntax::{json, Unordered, BorrowUnordered};
+/// use jstrict::{json, Unordered, BorrowUnordered};
 ///
 /// let a = json!({ "a": 0, "b": 1 });
 /// let b = json!({ "b": 1, "a": 0 });
@@ -136,7 +136,7 @@ pub type NumberBuf = crate::number::SmallNumberBuf<NUMBER_CAPACITY>;
 /// ## Example
 ///
 /// ```
-/// use json_syntax::{Value, Parse, Print};
+/// use jstrict::{Value, Parse, Print};
 ///
 /// let value = Value::parse_str("[ 0, 1, { \"key\": \"value\" }, null ]").unwrap().0;
 ///
@@ -144,8 +144,8 @@ pub type NumberBuf = crate::number::SmallNumberBuf<NUMBER_CAPACITY>;
 /// println!("{}", value.inline_print()); // single line, spaces
 /// println!("{}", value.compact_print()); // single line, no spaces
 ///
-/// let mut options = json_syntax::print::Options::pretty();
-/// options.indent = json_syntax::print::Indent::Tabs(1);
+/// let mut options = jstrict::print::Options::pretty();
+/// options.indent = jstrict::print::Indent::Tabs(1);
 /// println!("{}", value.print_with(options)); // multi line, indent with tabs
 /// ```
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]

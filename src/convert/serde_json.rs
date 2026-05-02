@@ -13,10 +13,10 @@ impl Value {
 	/// });
 	///
 	/// // We convert the `serde_json` value into a `json_syntax` value.
-	/// let b = json_syntax::Value::from_serde_json(a);
+	/// let b = jstrict::Value::from_serde_json(a);
 	///
 	/// // We convert it back into a `serde_json` value.
-	/// let _ = json_syntax::Value::into_serde_json(b);
+	/// let _ = jstrict::Value::into_serde_json(b);
 	/// ```
 	pub fn from_serde_json(value: serde_json::Value) -> Self {
 		match value {
@@ -53,10 +53,10 @@ impl Value {
 	/// });
 	///
 	/// // We convert the `serde_json` value into a `json_syntax` value.
-	/// let b = json_syntax::Value::from_serde_json(a);
+	/// let b = jstrict::Value::from_serde_json(a);
 	///
 	/// // We convert it back into a `serde_json` value.
-	/// let _ = json_syntax::Value::into_serde_json(b);
+	/// let _ = jstrict::Value::into_serde_json(b);
 	/// ```
 	pub fn into_serde_json(self) -> serde_json::Value {
 		match self {

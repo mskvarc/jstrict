@@ -35,7 +35,7 @@ document.
 
 ```rust
 use std::fs;
-use json_syntax::{Value, Parse, Print};
+use jstrict::{Value, Parse, Print};
 
 let filename = "tests/inputs/y_structure_500_nested_arrays.json";
 let input = fs::read_to_string(filename).unwrap();

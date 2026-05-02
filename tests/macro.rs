@@ -1,4 +1,4 @@
-use json_syntax::{
+use jstrict::{
 	json,
 	object::{Entry, Key},
 	Object, Value,

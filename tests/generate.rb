@@ -4,7 +4,7 @@ puts <<~EOS
 	use std::path::Path;
 	use std::fs;
 	use std::fmt::Debug;
-	use json_syntax::{Value, Parse, parse::Options};
+	use jstrict::{Value, Parse, parse::Options};
 	use decoded_char::DecodedChars;
 
 	fn infallible<T>(t: T) -> Result<T, std::convert::Infallible> {

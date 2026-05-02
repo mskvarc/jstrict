@@ -1,6 +1,6 @@
 use criterion::{criterion_group, criterion_main, Criterion, Throughput};
 use std::hint::black_box;
-use json_syntax::{Parse, Print, Value};
+use jstrict::{Parse, Print, Value};
 
 mod common;
 
@@ -52,14 +52,14 @@ fn bench_serde_round_trip(c: &mut Criterion) {
 			tags: vec!["a".into(), "b".into(), "c".into()],
 		})
 		.collect();
-	let value = json_syntax::to_value(&records).unwrap();
+	let value = jstrict::to_value(&records).unwrap();
 	let printed = value.compact_print().to_string();
 
 	c.bench_function("end_to_end/parse_from_to_print/records_100", |b| {
 		b.iter(|| {
 			let v = Value::parse_str(black_box(printed.as_str())).unwrap().0;
-			let r: Vec<Record> = json_syntax::from_value(v).unwrap();
-			let v2 = json_syntax::to_value(&r).unwrap();
+			let r: Vec<Record> = jstrict::from_value(v).unwrap();
+			let v2 = jstrict::to_value(&r).unwrap();
 			v2.compact_print().to_string()
 		});
 	});

@@ -14,10 +14,10 @@ impl Value {
 	/// });
 	///
 	/// // We convert the `sonic_rs` value into a `json_syntax` value.
-	/// let b = json_syntax::Value::from_sonic_rs(a);
+	/// let b = jstrict::Value::from_sonic_rs(a);
 	///
 	/// // We convert it back into a `sonic_rs` value.
-	/// let _ = json_syntax::Value::into_sonic_rs(b);
+	/// let _ = jstrict::Value::into_sonic_rs(b);
 	/// ```
 	pub fn from_sonic_rs(value: sonic_rs::Value) -> Self {
 		match value.as_ref() {
@@ -54,10 +54,10 @@ impl Value {
 	/// });
 	///
 	/// // We convert the `sonic_rs` value into a `json_syntax` value.
-	/// let b = json_syntax::Value::from_sonic_rs(a);
+	/// let b = jstrict::Value::from_sonic_rs(a);
 	///
 	/// // We convert it back into a `sonic_rs` value.
-	/// let _ = json_syntax::Value::into_sonic_rs(b);
+	/// let _ = jstrict::Value::into_sonic_rs(b);
 	/// ```
 	pub fn into_sonic_rs(self) -> sonic_rs::Value {
 		match self {

@@ -1,6 +1,6 @@
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
+use jstrict::{Parse, Value, parse::Options};
 use std::hint::black_box;
-use json_syntax::{parse::Options, Parse, Value};
 
 mod common;
 
@@ -41,9 +41,13 @@ fn bench_parse_group(c: &mut Criterion, name: &str, input: &str, with_baseline: 
 	});
 
 	let opts = Options::flexible();
-	group.bench_with_input(BenchmarkId::new("json_syntax", "flexible"), input, |b, s| {
-		b.iter(|| Value::parse_str_with(black_box(s), opts).unwrap());
-	});
+	group.bench_with_input(
+		BenchmarkId::new("json_syntax", "flexible"),
+		input,
+		|b, s| {
+			b.iter(|| Value::parse_str_with(black_box(s), opts).unwrap());
+		},
+	);
 
 	if with_baseline {
 		group.bench_with_input(BenchmarkId::new("serde_json", "from_str"), input, |b, s| {
@@ -115,14 +119,14 @@ fn bench_parse_value(c: &mut Criterion) {
 		group.bench_with_input(
 			BenchmarkId::new("json_syntax", "str_value"),
 			input.as_str(),
-			|b, s| b.iter(|| json_syntax::parse::parse_str_value(black_box(s)).unwrap()),
+			|b, s| b.iter(|| jstrict::parse::parse_str_value(black_box(s)).unwrap()),
 		);
 
 		let bytes = input.as_bytes().to_vec();
 		group.bench_with_input(
 			BenchmarkId::new("json_syntax", "slice_value"),
 			&bytes,
-			|b, s| b.iter(|| json_syntax::parse::parse_slice_value(black_box(s.as_slice())).unwrap()),
+			|b, s| b.iter(|| jstrict::parse::parse_slice_value(black_box(s.as_slice())).unwrap()),
 		);
 
 		group.bench_with_input(

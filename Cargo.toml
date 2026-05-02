@@ -1,34 +1,26 @@
 [package]
-name = "json-syntax"
-version = "0.13.0"
-edition = "2021"
-authors = ["Timothée Haudebourg <author@haudebourg.net>"]
+name = "jstrict"
 description = "Strict JSON parsing and mapping library"
-categories = ["parsing", "data-structures"]
-keywords = ["parsing", "json", "rfc", "mapping"]
-repository = "https://github.com/timothee-haudebourg/json-syntax"
-documentation = "https://docs.rs/json-syntax"
-license = "MIT/Apache-2.0"
-readme = "README.md"
+version = "0.13.0"
+edition = "2024"
 rust-version = "1.85.0"
+authors = [
+    "Timothée Haudebourg <author@haudebourg.net>",
+    "Matej Škvarč <matej.skvarc@senlab.io>",
+]
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/mskvarc/jstrict/"
+keywords = ["parsing", "json", "rfc", "mapping"]
+categories = ["parsing", "data-structures"]
 
 [features]
 default = ["simdutf8"]
-
-## JSON Canonicalization Scheme (JCS) implementation.
 canonicalize = ["ryu-js"]
-
-## Serialization/Deserialization support using `serde`.
 serde = ["dep:serde", "smallstr/serde"]
-
-## Compatibility layer with the `serde_json` crate.
 serde_json = ["dep:serde_json"]
-
-## Compatibility layer with the `sonic-rs` crate.
-sonic-rs = ["dep:sonic-rs"]
-
-## SIMD-accelerated UTF-8 validation in the slice parser.
 simdutf8 = ["dep:simdutf8"]
+sonic-rs = ["dep:sonic-rs"]
 
 [package.metadata.docs.rs]
 all-features = true

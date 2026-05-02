@@ -15,7 +15,7 @@ const NUMBER_TOKEN: &str = "$serde_json::private::Number";
 ///
 /// ```
 /// use serde::Serialize;
-/// use json_syntax::{json, Value};
+/// use jstrict::{json, Value};
 ///
 /// #[derive(Serialize)]
 /// struct User {
@@ -33,7 +33,7 @@ const NUMBER_TOKEN: &str = "$serde_json::private::Number";
 ///   "location": "Menlo Park, CA",
 /// });
 ///
-/// let v = json_syntax::to_value(u).unwrap();
+/// let v = jstrict::to_value(u).unwrap();
 /// assert_eq!(v, expected);
 /// ```
 pub fn to_value<T>(value: T) -> Result<Value, SerializeError>
@@ -49,7 +49,7 @@ where
 ///
 /// ```
 /// use serde::Deserialize;
-/// use json_syntax::{json, Value};
+/// use jstrict::{json, Value};
 ///
 /// #[derive(Deserialize, Debug)]
 /// struct User {
@@ -62,7 +62,7 @@ where
 ///   "location": "Menlo Park, CA"
 /// });
 ///
-/// let u: User = json_syntax::from_value(j).unwrap();
+/// let u: User = jstrict::from_value(j).unwrap();
 /// println!("{:#?}", u);
 /// ```
 pub fn from_value<T>(value: Value) -> Result<T, DeserializeError>

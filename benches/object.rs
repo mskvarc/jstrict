@@ -1,6 +1,6 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use std::hint::black_box;
-use json_syntax::{
+use jstrict::{
 	object::{Entry, Key},
 	Object, Parse, Value,
 };

@@ -203,7 +203,7 @@ impl KindSet {
 	/// # Example
 	///
 	/// ```
-	/// # use json_syntax::{Kind, KindSet};
+	/// # use jstrict::{Kind, KindSet};
 	/// let set = Kind::Null | Kind::String | Kind::Object;
 	/// assert_eq!(set.as_disjunction().to_string(), "null, string or object");
 	/// assert_eq!(KindSet::ARRAY.as_disjunction().to_string(), "array");
@@ -219,7 +219,7 @@ impl KindSet {
 	/// # Example
 	///
 	/// ```
-	/// # use json_syntax::{Kind, KindSet};
+	/// # use jstrict::{Kind, KindSet};
 	/// let set = Kind::Null | Kind::String | Kind::Object;
 	/// assert_eq!(set.as_conjunction().to_string(), "null, string and object");
 	/// assert_eq!(KindSet::ARRAY.as_conjunction().to_string(), "array");

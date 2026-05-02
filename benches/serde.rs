@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use criterion::{criterion_group, criterion_main, Criterion};
 use std::hint::black_box;
-use json_syntax::{Object, Parse, Value};
+use jstrict::{Object, Parse, Value};
 use serde::{Deserialize, Serialize};
 
 mod common;
@@ -78,7 +78,7 @@ fn build_users(n: usize) -> Vec<User> {
 fn bench_to_value(c: &mut Criterion) {
 	let users = build_users(200);
 	c.bench_function("serde/to_value/users_200", |b| {
-		b.iter(|| json_syntax::to_value(black_box(&users)).unwrap());
+		b.iter(|| jstrict::to_value(black_box(&users)).unwrap());
 	});
 	c.bench_function("serde/serde_json_to_value/users_200", |b| {
 		b.iter(|| serde_json::to_value(black_box(&users)).unwrap());
@@ -87,12 +87,12 @@ fn bench_to_value(c: &mut Criterion) {
 
 fn bench_from_value(c: &mut Criterion) {
 	let users = build_users(200);
-	let value = json_syntax::to_value(&users).unwrap();
+	let value = jstrict::to_value(&users).unwrap();
 	let sj_value = serde_json::to_value(&users).unwrap();
 
 	c.bench_function("serde/from_value/users_200", |b| {
 		b.iter(|| {
-			let v: Vec<User> = json_syntax::from_value(black_box(value.clone())).unwrap();
+			let v: Vec<User> = jstrict::from_value(black_box(value.clone())).unwrap();
 			v
 		});
 	});
@@ -108,8 +108,8 @@ fn bench_round_trip(c: &mut Criterion) {
 	let users = build_users(200);
 	c.bench_function("serde/round_trip/users_200", |b| {
 		b.iter(|| {
-			let v = json_syntax::to_value(black_box(&users)).unwrap();
-			let users2: Vec<User> = json_syntax::from_value(v).unwrap();
+			let v = jstrict::to_value(black_box(&users)).unwrap();
+			let users2: Vec<User> = jstrict::from_value(v).unwrap();
 			users2
 		});
 	});
@@ -121,7 +121,7 @@ fn bench_object_deserialize(c: &mut Criterion) {
 	let value = Value::parse_str(&json).unwrap().0;
 	c.bench_function("serde/object_deserialize/wide_1k", |b| {
 		b.iter(|| {
-			let o: Object = json_syntax::from_value(black_box(value.clone())).unwrap();
+			let o: Object = jstrict::from_value(black_box(value.clone())).unwrap();
 			o
 		});
 	});
