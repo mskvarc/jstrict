@@ -1,6 +1,6 @@
 use decoded_char::DecodedChar;
 use locspan::{Meta, Span};
-use std::{fmt, io};
+use std::fmt;
 
 mod array;
 mod boolean;
@@ -342,7 +342,7 @@ impl<E> Error<E> {
 	}
 }
 
-impl Error<io::Error> {
+impl Error<utf8_decode::Utf8Error> {
 	fn io_into_utf8(self) -> Error {
 		match self {
 			Self::Stream(p, _) => Error::InvalidUtf8(p),
