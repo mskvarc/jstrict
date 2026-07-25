@@ -1,3 +1,16 @@
+//! JSON printing.
+//!
+//! [`Print`] is the entry point. `pretty_print`, `inline_print` and
+//! `compact_print` cover the common cases; `print_with` takes an [`Options`]
+//! for everything else — indentation, padding, and the width or item count at
+//! which an array or object is expanded onto several lines.
+//!
+//! Printing is a two-pass process: sizes are precomputed
+//! ([`PrecomputeSize`]), then written out ([`PrintWithSize`]), so the layout
+//! decision for a nested value is known before it is emitted.
+//!
+//! Strings are escaped per
+//! [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785#name-serialization-of-strings).
 use std::fmt;
 
 #[cfg(feature = "contextual")]
@@ -6,14 +19,19 @@ mod contextual;
 #[cfg(feature = "contextual")]
 pub use self::contextual::*;
 
+/// Indentation unit.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub enum Indent {
+	/// The given number of spaces.
 	Spaces(u8),
+
+	/// The given number of tabs.
 	Tabs(u8),
 }
 
 impl Indent {
-	pub fn by(self, n: usize) -> IndentBy {
+	/// Repeats this indentation unit `n` times.
+	pub const fn by(self, n: usize) -> IndentBy {
 		IndentBy(self, n)
 	}
 }
@@ -37,6 +55,7 @@ impl fmt::Display for Indent {
 	}
 }
 
+/// An [`Indent`] repeated a given number of times, ready to be displayed.
 pub struct IndentBy(Indent, usize);
 
 impl fmt::Display for IndentBy {
@@ -49,6 +68,7 @@ impl fmt::Display for IndentBy {
 	}
 }
 
+/// The given number of spaces, ready to be displayed.
 pub struct Spaces(pub usize);
 
 impl fmt::Display for Spaces {
@@ -61,9 +81,13 @@ impl fmt::Display for Spaces {
 	}
 }
 
+/// Padding inserted between syntactic elements.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub enum Padding {
+	/// The given number of spaces.
 	Spaces(u8),
+
+	/// A line break.
 	NewLine,
 }
 
@@ -82,6 +106,7 @@ impl fmt::Display for Padding {
 	}
 }
 
+/// Threshold past which an array or object is expanded onto several lines.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub enum Limit {
 	/// Always expanded, even if empty.
@@ -153,7 +178,7 @@ pub struct Options {
 impl Options {
 	/// Pretty print options.
 	#[inline(always)]
-	pub fn pretty() -> Self {
+	pub const fn pretty() -> Self {
 		Self {
 			indent: Indent::Spaces(2),
 			array_begin: 1,
@@ -177,7 +202,7 @@ impl Options {
 	///
 	/// Values will be formatted on a single line without spaces.
 	#[inline(always)]
-	pub fn compact() -> Self {
+	pub const fn compact() -> Self {
 		Self {
 			indent: Indent::Spaces(0),
 			array_begin: 0,
@@ -201,7 +226,7 @@ impl Options {
 	///
 	/// Values will be formatted on a single line with some spaces.
 	#[inline(always)]
-	pub fn inline() -> Self {
+	pub const fn inline() -> Self {
 		Self {
 			indent: Indent::Spaces(0),
 			array_begin: 1,
@@ -233,7 +258,11 @@ pub enum Size {
 }
 
 impl Size {
-	pub fn add(&mut self, other: Self) {
+	/// Concatenates `other` to `self`.
+	///
+	/// Widths add up; anything combined with [`Size::Expanded`] stays
+	/// expanded.
+	pub const fn add(&mut self, other: Self) {
 		*self = match (*self, other) {
 			(Self::Width(a), Self::Width(b)) => Self::Width(a + b),
 			_ => Self::Expanded,
@@ -267,6 +296,8 @@ pub trait Print {
 		Printed(self, options, 0)
 	}
 
+	/// Writes the value to `f` with the given options, starting at the given
+	/// indentation level.
 	fn fmt_with(&self, f: &mut fmt::Formatter, options: &Options, indent: usize) -> fmt::Result;
 }
 
@@ -288,7 +319,13 @@ impl<T: Print + ?Sized> Print for &T {
 	}
 }
 
+/// Printing with precomputed sizes.
+///
+/// Implemented by the value types that can be expanded over several lines.
+/// `sizes` holds the layout decisions produced by [`PrecomputeSize`], in
+/// depth-first order, and `index` walks through them as printing proceeds.
 pub trait PrintWithSize {
+	/// Writes the value to `f`, taking its layout from `sizes[*index]`.
 	fn fmt_with_size(
 		&self,
 		f: &mut fmt::Formatter,
@@ -478,6 +515,7 @@ impl Print for crate::String {
 	}
 }
 
+/// Writes `items` as a JSON array, using the layout at `sizes[*index]`.
 pub fn print_array<I: IntoIterator>(
 	items: I,
 	f: &mut fmt::Formatter,
@@ -556,6 +594,7 @@ impl<T: PrintWithSize> PrintWithSize for Vec<T> {
 	}
 }
 
+/// Writes `entries` as a JSON object, using the layout at `sizes[*index]`.
 pub fn print_object<'a, V, I: IntoIterator<Item = (&'a str, V)>>(
 	entries: I,
 	f: &mut fmt::Formatter,
@@ -652,7 +691,13 @@ impl PrintWithSize for crate::Object {
 	}
 }
 
+/// Computation of the printed layout, ahead of printing.
+///
+/// Implementations push one [`Size`] per array/object encountered, in
+/// depth-first order, and return the size of the value itself.
 pub trait PrecomputeSize {
+	/// Computes the printed size of this value, appending the size of each
+	/// nested array and object to `sizes`.
 	fn pre_compute_size(&self, options: &Options, sizes: &mut Vec<Size>) -> Size;
 }
 
@@ -702,6 +747,7 @@ impl<T: PrecomputeSize, M> PrecomputeSize for locspan::Meta<T, M> {
 	}
 }
 
+/// Computes the printed size of an array made of `items`.
 pub fn pre_compute_array_size<I: IntoIterator>(
 	items: I,
 	options: &Options,
@@ -760,6 +806,7 @@ where
 	size
 }
 
+/// Computes the printed size of an object made of `entries`.
 pub fn pre_compute_object_size<'a, V, I: IntoIterator<Item = (&'a str, V)>>(
 	entries: I,
 	options: &Options,

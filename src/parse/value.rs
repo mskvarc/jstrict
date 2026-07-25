@@ -113,7 +113,7 @@ impl Parse for Value {
 		let mut stack: Vec<StackItem> = vec![];
 		let mut value: Option<Meta<Value, usize>> = None;
 
-		fn stack_context(stack: &[StackItem], root: Context) -> Context {
+		const fn stack_context(stack: &[StackItem], root: Context) -> Context {
 			match stack.last() {
 				Some(StackItem::Array(_) | StackItem::ArrayItem(_)) => Context::Array,
 				Some(StackItem::Object(_)) => Context::ObjectKey,

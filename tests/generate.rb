@@ -1,25 +1,20 @@
 #!/usr/bin/env ruby
 
 puts <<~EOS
-	use std::path::Path;
-	use std::fs;
+	use jstrict::{parse::Options, Parse, Value};
 	use std::fmt::Debug;
-	use jstrict::{Value, Parse, parse::Options};
-	use decoded_char::DecodedChars;
-
-	fn infallible<T>(t: T) -> Result<T, std::convert::Infallible> {
-		Ok(t)
-	}
+	use std::fs;
+	use std::path::Path;
 
 	fn test<P: Clone + AsRef<Path> + Debug>(filename: P, options: Options) {
-		let buffer = fs::read(filename.clone()).unwrap();
+		let buffer = fs::read(filename).unwrap();
 		let input = if options.accept_invalid_codepoints {
 			String::from_utf8_lossy(&buffer)
 		} else {
 			std::borrow::Cow::Borrowed(std::str::from_utf8(&buffer).unwrap())
 		};
 
-		Value::parse_with(filename, input.decoded_chars().map(infallible), options).expect("parse error");
+		Value::parse_str_with(&input, options).expect("parse error");
 	}
 EOS
 

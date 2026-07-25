@@ -1,9 +1,9 @@
 [package]
 name = "jstrict"
-description = "Strict JSON parsing and mapping library"
+description = "Strict RFC 8259 / ECMA-404 JSON parser with source code mapping"
 version = "0.13.0"
 edition = "2024"
-rust-version = "1.85.0"
+rust-version = "1.85.1"
 authors = [
     "Timothée Haudebourg <author@haudebourg.net>",
     "Matej Škvarč <matej.skvarc@senlab.io>",
@@ -11,19 +11,30 @@ authors = [
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/mskvarc/jstrict/"
-keywords = ["parsing", "json", "rfc", "mapping"]
-categories = ["parsing", "data-structures"]
+documentation = "https://docs.rs/jstrict"
+keywords = ["json", "parser", "rfc8259", "canonicalize", "simd"]
+categories = ["parser-implementations", "encoding", "data-structures"]
+autobenches = false
+exclude = ["/.github"]
 
 [features]
 default = ["simdutf8"]
-canonicalize = ["ryu-js"]
+# JSON Canonicalization Scheme (RFC 8785).
+canonicalize = ["dep:ryu-js"]
+# `contextual::WithContext` printing adapters.
+contextual = ["dep:contextual"]
+# `Serialize` / `Deserialize` for `Value`, `Object`, `Number`.
 serde = ["dep:serde", "smallstr/serde"]
+# Conversion from/to `serde_json::Value`.
 serde_json = ["dep:serde_json"]
+# SIMD-accelerated UTF-8 validation in the slice parser.
 simdutf8 = ["dep:simdutf8"]
+# Conversion from/to `sonic_rs::Value`.
 sonic-rs = ["dep:sonic-rs"]
 
 [package.metadata.docs.rs]
 all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 
 [lib]
 bench = false
@@ -51,6 +62,17 @@ criterion = { version = "0.8.2", features = ["html_reports"] }
 ryu-js = "1.0.2"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
+
+[lints.clippy]
+wildcard_dependencies = "warn"
+wildcard_imports = "warn"
+used_underscore_binding = "warn"
+missing_const_for_fn = "warn"
+cloned_instead_of_copied = "warn"
+unnecessary_self_imports = "warn"
+redundant_clone = "warn"
+needless_collect = "warn"
+map_unwrap_or = "warn"
 
 [[example]]
 name = "serde"

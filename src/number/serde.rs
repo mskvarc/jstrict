@@ -209,7 +209,7 @@ impl<'de, B: Buffer> Deserializer<'de> for NumberBuf<B> {
 	}
 }
 
-impl<'de, 'n, B: Buffer> Deserializer<'de> for &'n NumberBuf<B> {
+impl<'de, B: Buffer> Deserializer<'de> for &NumberBuf<B> {
 	type Error = Unexpected;
 
 	#[inline(always)]
@@ -227,7 +227,7 @@ impl<'de, 'n, B: Buffer> Deserializer<'de> for &'n NumberBuf<B> {
 	}
 }
 
-impl<'de, 'n> Deserializer<'de> for &'n Number {
+impl<'de> Deserializer<'de> for &Number {
 	type Error = Unexpected;
 
 	#[inline(always)]

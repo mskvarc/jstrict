@@ -18,7 +18,7 @@ fn fixtures() -> Vec<(&'static str, String)> {
 	]
 }
 
-fn custom_options() -> PrintOptions {
+const fn custom_options() -> PrintOptions {
 	let mut opts = PrintOptions::pretty();
 	opts.indent = Indent::Tabs(1);
 	opts.array_limit = Some(Limit::ItemOrWidth(2, 32));
@@ -37,23 +37,19 @@ fn bench_print(c: &mut Criterion) {
 		let mut group = c.benchmark_group(format!("print/{}", name));
 
 		group.throughput(Throughput::Bytes(compact_size));
-		group.bench_with_input(
-			BenchmarkId::new("json_syntax", "compact"),
-			&value,
-			|b, v| {
-				b.iter(|| black_box(v).compact_print().to_string());
-			},
-		);
-		group.bench_with_input(BenchmarkId::new("json_syntax", "inline"), &value, |b, v| {
+		group.bench_with_input(BenchmarkId::new("jstrict", "compact"), &value, |b, v| {
+			b.iter(|| black_box(v).compact_print().to_string());
+		});
+		group.bench_with_input(BenchmarkId::new("jstrict", "inline"), &value, |b, v| {
 			b.iter(|| black_box(v).inline_print().to_string());
 		});
 
 		group.throughput(Throughput::Bytes(pretty_size));
-		group.bench_with_input(BenchmarkId::new("json_syntax", "pretty"), &value, |b, v| {
+		group.bench_with_input(BenchmarkId::new("jstrict", "pretty"), &value, |b, v| {
 			b.iter(|| black_box(v).pretty_print().to_string());
 		});
 		let custom = custom_options();
-		group.bench_with_input(BenchmarkId::new("json_syntax", "custom"), &value, |b, v| {
+		group.bench_with_input(BenchmarkId::new("jstrict", "custom"), &value, |b, v| {
 			b.iter(|| black_box(v).print_with(custom.clone()).to_string());
 		});
 

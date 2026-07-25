@@ -8,7 +8,7 @@ fn main() {
 		"bar": [2, 3]
 	});
 
-	// We convert the `sonic_rs` value into a `json_syntax` value.
+	// We convert the `sonic_rs` value into a `jstrict` value.
 	let b = jstrict::Value::from_sonic_rs(a);
 
 	// We convert it back into a `sonic_rs` value.

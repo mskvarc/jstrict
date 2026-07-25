@@ -1,3 +1,10 @@
+//! JSON objects.
+//!
+//! A JSON [`Object`] is a *list* of key-value [`Entry`] in definition order,
+//! not a map: duplicate keys are preserved exactly as they appear in the
+//! source. An internal index still gives `O(1)` average lookup by key, and
+//! the `*_unique` accessors report duplicates as an error instead of silently
+//! picking one.
 use crate::code_map::Mapped;
 use crate::{CodeMap, FragmentRef, UnorderedEq, UnorderedPartialEq, Value};
 use core::cmp::Ordering;
@@ -21,43 +28,55 @@ pub type Key = smallstr::SmallString<[u8; KEY_CAPACITY]>;
 /// Object entry.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub struct Entry<K = Key, V = Value> {
+	/// Entry key.
 	pub key: K,
+
+	/// Entry value.
 	pub value: V,
 }
 
 impl<K, V> Entry<K, V> {
-	pub fn new(key: K, value: V) -> Self {
+	/// Creates a new entry from a key and a value.
+	pub const fn new(key: K, value: V) -> Self {
 		Self { key, value }
 	}
 
-	pub fn as_key(&self) -> &K {
+	/// Returns a reference to the key.
+	pub const fn as_key(&self) -> &K {
 		&self.key
 	}
 
-	pub fn as_value(&self) -> &V {
+	/// Returns a reference to the value.
+	pub const fn as_value(&self) -> &V {
 		&self.value
 	}
 
+	/// Consumes this entry, returning its key.
 	pub fn into_key(self) -> K {
 		self.key
 	}
 
+	/// Consumes this entry, returning its value.
 	pub fn into_value(self) -> V {
 		self.value
 	}
 
-	pub fn as_pair(&self) -> (&K, &V) {
+	/// Returns references to the key and the value.
+	pub const fn as_pair(&self) -> (&K, &V) {
 		(&self.key, &self.value)
 	}
 
+	/// Consumes this entry, returning its key and value.
 	pub fn into_pair(self) -> (K, V) {
 		(self.key, self.value)
 	}
 
-	pub fn as_ref(&self) -> Entry<&K, &V> {
+	/// Borrows this entry as an `Entry<&K, &V>`.
+	pub const fn as_ref(&self) -> Entry<&K, &V> {
 		Entry::new(&self.key, &self.value)
 	}
 
+	/// Attaches code map offsets to the key and the value of this entry.
 	pub fn into_mapped(
 		self,
 		key_offset: usize,
@@ -71,6 +90,10 @@ impl<K, V> Entry<K, V> {
 }
 
 impl Entry {
+	/// Returns the fragment at the given `index` in traversal order, where
+	/// index `0` is the entry itself and index `1` its key.
+	///
+	/// On failure, returns the number of fragments left to skip.
 	pub fn get_fragment(&self, index: usize) -> Result<FragmentRef<'_>, usize> {
 		match index {
 			0 => Ok(FragmentRef::Entry(self)),
@@ -80,10 +103,14 @@ impl Entry {
 	}
 }
 
+/// Borrowed object entry, with the code map offset of the entry, its key and
+/// its value.
 pub type MappedEntry<'a> = Mapped<Entry<Mapped<&'a Key>, Mapped<&'a Value>>>;
 
+/// A [`MappedEntry`] together with its position in the object.
 pub type IndexedMappedEntry<'a> = (usize, MappedEntry<'a>);
 
+/// A mapped entry value together with the entry's position in the object.
 pub type IndexedMappedValue<'a> = (usize, Mapped<&'a Value>);
 
 /// Object.
@@ -106,10 +133,12 @@ impl Default for Object {
 }
 
 impl Object {
+	/// Creates a new empty object.
 	pub fn new() -> Self {
 		Self::default()
 	}
 
+	/// Creates a new empty object with room for `capacity` entries.
 	pub fn with_capacity(capacity: usize) -> Self {
 		Self {
 			entries: Vec::with_capacity(capacity),
@@ -117,6 +146,8 @@ impl Object {
 		}
 	}
 
+	/// Builds an object from a list of entries, keeping their order and any
+	/// duplicate keys.
 	pub fn from_vec(entries: Vec<Entry>) -> Self {
 		let mut indexes = IndexMap::with_capacity(entries.len());
 		for i in 0..entries.len() {
@@ -126,18 +157,26 @@ impl Object {
 		Self { entries, indexes }
 	}
 
+	/// Returns the number of entries this object can hold without
+	/// reallocating.
 	pub fn capacity(&self) -> usize {
 		self.entries.capacity()
 	}
 
+	/// Returns the number of entries in this object, duplicates included.
 	pub fn len(&self) -> usize {
 		self.entries.len()
 	}
 
+	/// Checks if this object has no entries.
 	pub fn is_empty(&self) -> bool {
 		self.entries.is_empty()
 	}
 
+	/// Returns the fragment at the given `index`, relative to the *contents*
+	/// of this object: index `0` is the first entry.
+	///
+	/// On failure, returns the number of fragments left to skip.
 	pub fn get_fragment(&self, mut index: usize) -> Result<FragmentRef<'_>, usize> {
 		for e in &self.entries {
 			match e.get_fragment(index) {
@@ -149,18 +188,27 @@ impl Object {
 		Err(index)
 	}
 
+	/// Returns the entries of this object as a slice, in definition order.
 	pub fn entries(&self) -> &[Entry] {
 		&self.entries
 	}
 
+	/// Iterates over the entries of this object, in definition order.
 	pub fn iter(&self) -> Iter<'_> {
 		self.entries.iter()
 	}
 
+	/// Iterates over the entries of this object, yielding mutable values.
+	///
+	/// Keys are not mutable: changing one would invalidate the key index.
 	pub fn iter_mut(&mut self) -> IterMut<'_> {
 		IterMut(self.entries.iter_mut())
 	}
 
+	/// Iterates over the entries of this object, pairing each entry, key and
+	/// value with its offset in `code_map`.
+	///
+	/// `offset` is the code map offset of the object itself.
 	pub fn iter_mapped<'m>(&self, code_map: &'m CodeMap, offset: usize) -> IterMapped<'_, 'm> {
 		IterMapped {
 			entries: self.entries.iter(),
@@ -375,6 +423,9 @@ impl Object {
 		&mut self.entries[index].value
 	}
 
+	/// Returns the position of the first entry matching `key`.
+	///
+	/// Runs in `O(1)` (average).
 	pub fn index_of<Q>(&self, key: &Q) -> Option<usize>
 	where
 		Q: ?Sized + Hash + Equivalent<Key>,
@@ -384,6 +435,10 @@ impl Object {
 			.map(index_map::Indexes::first)
 	}
 
+	/// Returns the position of the *second* entry matching `key`, if the key
+	/// is duplicated.
+	///
+	/// Runs in `O(1)` (average).
 	pub fn redundant_index_of<Q>(&self, key: &Q) -> Option<usize>
 	where
 		Q: ?Sized + Hash + Equivalent<Key>,
@@ -393,6 +448,9 @@ impl Object {
 			.and_then(index_map::Indexes::redundant)
 	}
 
+	/// Iterates over the positions of every entry matching `key`.
+	///
+	/// Runs in `O(1)` (average).
 	pub fn indexes_of<Q>(&self, key: &Q) -> Indexes<'_>
 	where
 		Q: ?Sized + Hash + Equivalent<Key>,
@@ -609,10 +667,12 @@ impl Object {
 		}
 	}
 
+	/// Returns the first entry of this object.
 	pub fn first(&self) -> Option<&Entry> {
 		self.entries.first()
 	}
 
+	/// Returns the last entry of this object.
 	pub fn last(&self) -> Option<&Entry> {
 		self.entries.last()
 	}
@@ -629,6 +689,11 @@ impl Object {
 		self.push_entry(Entry::new(key, value))
 	}
 
+	/// Push the given entry to the end of the object.
+	///
+	/// Returns `true` if its key was not already present in the object.
+	///
+	/// Runs in `O(1)`.
 	pub fn push_entry(&mut self, entry: Entry) -> bool {
 		let index = self.entries.len();
 		self.entries.push(entry);
@@ -647,6 +712,11 @@ impl Object {
 		self.push_entry_front(Entry::new(key, value))
 	}
 
+	/// Push the given entry to the top of the object.
+	///
+	/// Returns `true` if its key was not already present in the object.
+	///
+	/// Runs in `O(n)`.
 	pub fn push_entry_front(&mut self, entry: Entry) -> bool {
 		self.entries.insert(0, entry);
 		self.indexes.shift_up(0);
@@ -713,7 +783,7 @@ impl Object {
 	/// Remove all entries associated to the given key.
 	///
 	/// Runs in `O(n)` time (average).
-	pub fn remove<'q, Q>(&mut self, key: &'q Q) -> RemovedEntries<'_, 'q, Q>
+	pub const fn remove<'q, Q>(&mut self, key: &'q Q) -> RemovedEntries<'_, 'q, Q>
 	where
 		Q: ?Sized + Hash + Equivalent<Key>,
 	{
@@ -776,8 +846,12 @@ impl Object {
 	}
 }
 
+/// Iterator over the entries of an [`Object`], in definition order.
 pub type Iter<'a> = core::slice::Iter<'a, Entry>;
 
+/// Iterator over the entries of an [`Object`], yielding mutable values.
+///
+/// Returned by [`Object::iter_mut`].
 pub struct IterMut<'a>(std::slice::IterMut<'a, Entry>);
 
 impl<'a> Iterator for IterMut<'a> {
@@ -788,6 +862,9 @@ impl<'a> Iterator for IterMut<'a> {
 	}
 }
 
+/// Iterator over the entries of an [`Object`], with their code map offsets.
+///
+/// Returned by [`Object::iter_mapped`].
 pub struct IterMapped<'a, 'm> {
 	entries: std::slice::Iter<'a, Entry>,
 	code_map: &'m CodeMap,
@@ -938,14 +1015,23 @@ impl FromIterator<(Key, Value)> for Object {
 	}
 }
 
+/// Iterator over the positions of the entries matching a key.
+///
+/// Returned by [`Object::indexes_of`].
 #[derive(Default)]
 pub enum Indexes<'a> {
+	/// At least one entry matches the key.
 	Some {
+		/// Position of the first matching entry, until it is yielded.
 		first: Option<usize>,
+
+		/// Positions of the remaining matching entries.
 		other: core::slice::Iter<'a, usize>,
 	},
+
+	/// No entry matches the key.
 	#[default]
- None,
+	None,
 }
 
 
@@ -956,7 +1042,7 @@ impl<'a> Iterator for Indexes<'a> {
 		match self {
 			Self::Some { first, other } => match first.take() {
 				Some(index) => Some(index),
-				None => other.next().cloned(),
+				None => other.next().copied(),
 			},
 			Self::None => None,
 		}
@@ -970,6 +1056,11 @@ macro_rules! entries_iter {
 		fn next(&mut $self:ident, $index:ident) { $e:expr }
 	})*) => {
 		$(
+			#[doc = concat!(
+				"Iterator over the entries of an [`Object`] matching a key, yielding `",
+				stringify!($item),
+				"`."
+			)]
 			pub struct $id<$lft> {
 				indexes: Indexes<$lft>,
 				object: &$lft Object
@@ -1019,6 +1110,11 @@ macro_rules! entries_iter_mut {
 		fn next(&mut $self:ident, $index:ident) { $e:expr }
 	})*) => {
 		$(
+			#[doc = concat!(
+				"Mutable iterator over the entries of an [`Object`] matching a key, yielding `",
+				stringify!($item),
+				"`."
+			)]
 			pub struct $id<$lft> {
 				indexes: Indexes<$lft>,
 				entries: &$lft mut [Entry]
@@ -1062,6 +1158,11 @@ macro_rules! mapped_entries_iter {
 		fn next(&mut $self:ident, $index:ident) { $e:expr }
 	})*) => {
 		$(
+			#[doc = concat!(
+				"Iterator over the entries of an [`Object`] matching a key, yielding `",
+				stringify!($item),
+				"` with code map offsets."
+			)]
 			pub struct $id<$lft, 'm> {
 				indexes: Indexes<$lft>,
 				object: &$lft Object,
@@ -1146,6 +1247,9 @@ mapped_entries_iter! {
 	}
 }
 
+/// Iterator over the entries removed by [`Object::insert`].
+///
+/// Dropping it removes the remaining duplicates.
 pub struct RemovedByInsertion<'a> {
 	index: usize,
 	first: Option<Entry>,
@@ -1174,6 +1278,9 @@ impl<'a> Drop for RemovedByInsertion<'a> {
 	}
 }
 
+/// Iterator over the entries removed by [`Object::insert_front`].
+///
+/// Dropping it removes the remaining duplicates.
 pub struct RemovedByInsertFront<'a> {
 	first: Option<Entry>,
 	object: &'a mut Object,
@@ -1201,6 +1308,9 @@ impl<'a> Drop for RemovedByInsertFront<'a> {
 	}
 }
 
+/// Iterator over the entries removed by [`Object::remove`].
+///
+/// Dropping it removes the remaining matching entries.
 pub struct RemovedEntries<'a, 'q, Q: ?Sized>
 where
 	Q: Hash + Equivalent<Key>,
@@ -1231,6 +1341,10 @@ where
 	}
 }
 
+/// Two items sharing the same object key.
+///
+/// Returned by the `*_unique` accessors of [`Object`] when the requested key
+/// matches more than one entry.
 #[derive(Debug)]
 pub struct Duplicate<T>(pub T, pub T);
 

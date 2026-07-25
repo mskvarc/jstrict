@@ -9,16 +9,19 @@ use std::fmt;
 use std::ops::Deref;
 use std::str::FromStr;
 
+/// `serde` support for [`Number`] and [`NumberBuf`].
 #[cfg(feature = "serde")]
 pub mod serde;
 
+/// Conversion between [`NumberBuf`] and `serde_json::Number`.
 #[cfg(feature = "serde_json")]
 pub mod serde_json;
 
+/// Conversion between [`NumberBuf`] and `sonic_rs::Number`.
 #[cfg(feature = "sonic-rs")]
 pub mod sonic_rs;
 
-/// JSON number buffer based on [`SmallVec`](smallvec::SmallVec).
+/// JSON number buffer based on [`SmallVec`].
 pub type SmallNumberBuf<const LEN: usize = 8> = NumberBuf<SmallVec<[u8; LEN]>>;
 
 unsafe impl<A: smallvec::Array<Item = u8>> Buffer for SmallVec<A> {
@@ -48,39 +51,44 @@ impl<T: fmt::Display + fmt::Debug> std::error::Error for InvalidNumber<T> {}
 /// Number sign.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub enum Sign {
+	/// Strictly negative.
 	Negative,
+
+	/// Zero, whatever its lexical form (`0`, `-0`, `0.00e12`, …).
 	Zero,
+
+	/// Strictly positive.
 	Positive,
 }
 
 impl Sign {
 	/// Checks if the number is zero.
 	#[inline(always)]
-	pub fn is_zero(&self) -> bool {
+	pub const fn is_zero(&self) -> bool {
 		matches!(self, Self::Zero)
 	}
 
 	/// Checks if the number is non positive (negative or zero).
 	#[inline(always)]
-	pub fn is_non_positive(&self) -> bool {
+	pub const fn is_non_positive(&self) -> bool {
 		matches!(self, Self::Negative | Self::Zero)
 	}
 
 	/// Checks if the number is non negative (positive or zero).
 	#[inline(always)]
-	pub fn is_non_negative(&self) -> bool {
+	pub const fn is_non_negative(&self) -> bool {
 		matches!(self, Self::Positive | Self::Zero)
 	}
 
 	/// Checks if the number is strictly positive (non zero nor negative).
 	#[inline(always)]
-	pub fn is_positive(&self) -> bool {
+	pub const fn is_positive(&self) -> bool {
 		matches!(self, Self::Positive)
 	}
 
 	/// Checks if the number is strictly negative (non zero nor positive).
 	#[inline(always)]
-	pub fn is_negative(&self) -> bool {
+	pub const fn is_negative(&self) -> bool {
 		matches!(self, Self::Negative)
 	}
 }
@@ -183,14 +191,19 @@ impl Number {
 		unsafe { std::mem::transmute(data.as_ref()) }
 	}
 
+	/// Returns the lexical representation of this number.
 	#[inline(always)]
-	pub fn as_str(&self) -> &str {
+	pub const fn as_str(&self) -> &str {
 		unsafe {
 			// safe because `self.data` is always a valid UTF-8 sequence.
 			std::str::from_utf8_unchecked(&self.data)
 		}
 	}
 
+	/// Strips insignificant trailing zeros from the fraction part.
+	///
+	/// `1.10000` becomes `1.1`, `1.0` becomes `1`. The exponent part, if any,
+	/// is left untouched.
 	pub fn trimmed(&self) -> &Self {
 		let mut end = 1;
 		let mut i = 1;
@@ -298,46 +311,59 @@ impl Number {
 		false
 	}
 
+	/// Checks if this number is exactly representable as an `i32`.
 	#[inline(always)]
 	pub fn is_i32(&self) -> bool {
 		self.as_i32().is_some()
 	}
 
+	/// Checks if this number is exactly representable as an `i64`.
 	#[inline(always)]
 	pub fn is_i64(&self) -> bool {
 		self.as_i64().is_some()
 	}
 
+	/// Checks if this number is exactly representable as a `u32`.
 	#[inline(always)]
 	pub fn is_u32(&self) -> bool {
 		self.as_u32().is_some()
 	}
 
+	/// Checks if this number is exactly representable as a `u64`.
 	#[inline(always)]
 	pub fn is_u64(&self) -> bool {
 		self.as_u64().is_some()
 	}
 
+	/// Returns this number as an `i32`, or `None` if it is not an integer in
+	/// range.
 	#[inline(always)]
 	pub fn as_i32(&self) -> Option<i32> {
 		self.as_str().parse().ok()
 	}
 
+	/// Returns this number as an `i64`, or `None` if it is not an integer in
+	/// range.
 	#[inline(always)]
 	pub fn as_i64(&self) -> Option<i64> {
 		self.as_str().parse().ok()
 	}
 
+	/// Returns this number as a `u32`, or `None` if it is not an integer in
+	/// range.
 	#[inline(always)]
 	pub fn as_u32(&self) -> Option<u32> {
 		self.as_str().parse().ok()
 	}
 
+	/// Returns this number as a `u64`, or `None` if it is not an integer in
+	/// range.
 	#[inline(always)]
 	pub fn as_u64(&self) -> Option<u64> {
 		self.as_str().parse().ok()
 	}
 
+	/// Returns this number as an `f32`, rounding if necessary.
 	#[inline(always)]
 	pub fn as_f32_lossy(&self) -> f32 {
 		lexical::parse_with_options::<_, _, { lexical::format::JSON }>(
@@ -363,6 +389,7 @@ impl Number {
 		}
 	}
 
+	/// Returns this number as an `f64`, rounding if necessary.
 	#[inline(always)]
 	pub fn as_f64_lossy(&self) -> f64 {
 		lexical::parse_with_options::<_, _, { lexical::format::JSON }>(
@@ -476,8 +503,11 @@ impl fmt::Debug for Number {
 /// The `AsRef<[u8]>` implementation *must* return the bytes provided using
 /// the `from_bytes` and `from_vec` constructor functions.
 pub unsafe trait Buffer: AsRef<[u8]> {
+	/// Builds a buffer holding exactly `bytes`.
 	fn from_bytes(bytes: &[u8]) -> Self;
 
+	/// Builds a buffer holding exactly `bytes`, reusing the allocation where
+	/// possible.
 	fn from_vec(bytes: Vec<u8>) -> Self;
 }
 
@@ -516,7 +546,7 @@ impl<B> NumberBuf<B> {
 	///
 	/// The input `data` **must** hold a valid JSON number string.
 	#[inline(always)]
-	pub unsafe fn new_unchecked(data: B) -> Self {
+	pub const unsafe fn new_unchecked(data: B) -> Self {
 		NumberBuf { data }
 	}
 
@@ -529,11 +559,13 @@ impl<B> NumberBuf<B> {
 		unsafe { NumberBuf::new_unchecked(n.bytes().collect()) }
 	}
 
+	/// Returns a reference to the underlying buffer.
 	#[inline(always)]
-	pub fn buffer(&self) -> &B {
+	pub const fn buffer(&self) -> &B {
 		&self.data
 	}
 
+	/// Consumes this number, returning the underlying buffer.
 	#[inline(always)]
 	pub fn into_buffer(self) -> B {
 		self.data
@@ -541,11 +573,14 @@ impl<B> NumberBuf<B> {
 }
 
 impl NumberBuf<String> {
+	/// Consumes this number, returning its lexical representation.
 	#[inline(always)]
 	pub fn into_string(self) -> String {
 		self.data
 	}
 
+	/// Consumes this number, returning the bytes of its lexical
+	/// representation.
 	#[inline(always)]
 	pub fn into_bytes(self) -> Vec<u8> {
 		self.data.into_bytes()
@@ -553,6 +588,7 @@ impl NumberBuf<String> {
 }
 
 impl<B: Buffer> NumberBuf<B> {
+	/// Borrows this number buffer as an unsized [`Number`].
 	#[inline(always)]
 	pub fn as_number(&self) -> &Number {
 		unsafe { Number::new_unchecked(&self.data) }

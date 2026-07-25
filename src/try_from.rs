@@ -66,6 +66,7 @@ impl<T: TryFromJson> TryFromJson for Option<T> {
 /// This trait is very similar to [`TryFrom<Object>`] but also passes code
 /// code mapping info to the conversion function.
 pub trait TryFromJsonObject: Sized {
+	/// Error that may be returned by the conversion function.
 	type Error;
 
 	/// Tries to convert the given JSON object into `Self`, using the given
@@ -169,6 +170,10 @@ impl TryFromJson for bool {
 	}
 }
 
+/// Marker naming the numeric type a conversion was attempted into.
+///
+/// Carried by [`TryIntoNumberError::OutOfBounds`] so the error can report
+/// which type the JSON number did not fit in.
 pub struct NumberType<T>(PhantomData<T>);
 
 impl<T> Clone for NumberType<T> {
@@ -197,12 +202,18 @@ impl<T> fmt::Display for NumberType<T> {
 	}
 }
 
+/// Error returned when converting a JSON value into a number type.
 pub enum TryIntoNumberError<T> {
+	/// The value was not a JSON number at all.
 	Unexpected(Unexpected),
+
+	/// The value was a number, but out of range for the target type.
 	OutOfBounds(T),
 }
 
 impl<T> TryIntoNumberError<T> {
+	/// Maps the out-of-bounds payload with `f`, leaving
+	/// [`Unexpected`](Self::Unexpected) untouched.
 	pub fn map<U>(self, f: impl FnOnce(T) -> U) -> TryIntoNumberError<U> {
 		match self {
 			Self::Unexpected(e) => TryIntoNumberError::Unexpected(e),

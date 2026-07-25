@@ -31,23 +31,19 @@ fn bench_parse_group(c: &mut Criterion, name: &str, input: &str, with_baseline: 
 	let mut group = c.benchmark_group(format!("parse/{}", name));
 	group.throughput(Throughput::Bytes(input.len() as u64));
 
-	group.bench_with_input(BenchmarkId::new("json_syntax", "strict"), input, |b, s| {
+	group.bench_with_input(BenchmarkId::new("jstrict", "strict"), input, |b, s| {
 		b.iter(|| Value::parse_str(black_box(s)).unwrap());
 	});
 
 	let bytes = input.as_bytes().to_vec();
-	group.bench_with_input(BenchmarkId::new("json_syntax", "slice"), &bytes, |b, s| {
+	group.bench_with_input(BenchmarkId::new("jstrict", "slice"), &bytes, |b, s| {
 		b.iter(|| Value::parse_slice(black_box(s.as_slice())).unwrap());
 	});
 
 	let opts = Options::flexible();
-	group.bench_with_input(
-		BenchmarkId::new("json_syntax", "flexible"),
-		input,
-		|b, s| {
-			b.iter(|| Value::parse_str_with(black_box(s), opts).unwrap());
-		},
-	);
+	group.bench_with_input(BenchmarkId::new("jstrict", "flexible"), input, |b, s| {
+		b.iter(|| Value::parse_str_with(black_box(s), opts).unwrap());
+	});
 
 	if with_baseline {
 		group.bench_with_input(BenchmarkId::new("serde_json", "from_str"), input, |b, s| {
@@ -117,14 +113,14 @@ fn bench_parse_value(c: &mut Criterion) {
 		group.throughput(Throughput::Bytes(input.len() as u64));
 
 		group.bench_with_input(
-			BenchmarkId::new("json_syntax", "str_value"),
+			BenchmarkId::new("jstrict", "str_value"),
 			input.as_str(),
 			|b, s| b.iter(|| jstrict::parse::parse_str_value(black_box(s)).unwrap()),
 		);
 
 		let bytes = input.as_bytes().to_vec();
 		group.bench_with_input(
-			BenchmarkId::new("json_syntax", "slice_value"),
+			BenchmarkId::new("jstrict", "slice_value"),
 			&bytes,
 			|b, s| b.iter(|| jstrict::parse::parse_slice_value(black_box(s.as_slice())).unwrap()),
 		);

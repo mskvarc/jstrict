@@ -46,10 +46,16 @@ impl Serialize for Object {
 	}
 }
 
+/// Error returned when serializing a type into a [`Value`](crate::Value).
 #[derive(Debug, Clone)]
 pub enum SerializeError {
+	/// Error reported by the `Serialize` implementation.
 	Custom(String),
+
+	/// A map key was not a string, which JSON cannot represent.
 	NonStringKey,
+
+	/// An arbitrary-precision number token did not carry a valid JSON number.
 	MalformedHighPrecisionNumber,
 }
 
@@ -137,15 +143,13 @@ impl serde::Serializer for Serializer {
 	#[inline(always)]
 	fn serialize_f32(self, v: f32) -> Result<Self::Ok, Self::Error> {
 		Ok(NumberBuf::try_from(v)
-			.map(Value::Number)
-			.unwrap_or(Value::Null))
+			.map_or(Value::Null, Value::Number))
 	}
 
 	#[inline(always)]
 	fn serialize_f64(self, v: f64) -> Result<Self::Ok, Self::Error> {
 		Ok(NumberBuf::try_from(v)
-			.map(Value::Number)
-			.unwrap_or(Value::Null))
+			.map_or(Value::Null, Value::Number))
 	}
 
 	#[inline(always)]
@@ -297,6 +301,10 @@ impl serde::Serializer for Serializer {
 	}
 }
 
+/// Serializer accepting only a number in string form.
+///
+/// Used to decode `serde`'s arbitrary-precision number token, which carries
+/// the number as a string so no precision is lost.
 pub struct StringNumberSerializer;
 
 impl serde::Serializer for StringNumberSerializer {
@@ -469,6 +477,10 @@ impl serde::Serializer for StringNumberSerializer {
 	}
 }
 
+/// Serializer for object keys.
+///
+/// Accepts anything that renders as a string; other types fail with
+/// [`SerializeError::NonStringKey`].
 pub struct KeySerializer;
 
 impl serde::Serializer for KeySerializer {
@@ -653,6 +665,7 @@ impl serde::Serializer for KeySerializer {
 	}
 }
 
+/// Serializes a sequence, tuple or tuple struct into a JSON array.
 pub struct SerializeArray {
 	array: Array,
 }
@@ -706,6 +719,8 @@ impl serde::ser::SerializeTupleStruct for SerializeArray {
 	}
 }
 
+/// Serializes a tuple enum variant into a single-entry object mapping the
+/// variant name to an array.
 pub struct SerializeTupleVariant {
 	name: Key,
 	array: Array,
@@ -731,6 +746,8 @@ impl serde::ser::SerializeTupleVariant for SerializeTupleVariant {
 	}
 }
 
+/// Serializes a struct enum variant into a single-entry object mapping the
+/// variant name to an object.
 pub struct SerializeStructVariant {
 	name: Key,
 	obj: Object,
@@ -757,8 +774,19 @@ impl serde::ser::SerializeStructVariant for SerializeStructVariant {
 	}
 }
 
+/// Serializes a map or struct into a JSON object.
 pub enum SerializeMap {
-	Object { obj: Object, next_key: Option<Key> },
+	/// The usual case: entries are collected into an object.
+	Object {
+		/// Entries serialized so far.
+		obj: Object,
+
+		/// Key awaiting its value.
+		next_key: Option<Key>,
+	},
+
+	/// The map is `serde`'s arbitrary-precision number token, which
+	/// serializes to a number rather than an object.
 	Number(Option<NumberBuf>),
 }
 

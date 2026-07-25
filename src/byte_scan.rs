@@ -8,13 +8,13 @@ const HI_BITS: u64 = 0x8080_8080_8080_8080;
 
 /// Word-wise mask: bit 7 of every byte where `byte < 0x20`.
 #[inline(always)]
-fn mask_lt_0x20(v: u64) -> u64 {
+const fn mask_lt_0x20(v: u64) -> u64 {
 	v.wrapping_sub(0x20 * LO_BITS) & !v & HI_BITS
 }
 
 /// Word-wise mask: bit 7 of every byte equal to `c`.
 #[inline(always)]
-fn mask_eq(v: u64, c: u8) -> u64 {
+const fn mask_eq(v: u64, c: u8) -> u64 {
 	let x = v ^ (c as u64 * LO_BITS);
 	x.wrapping_sub(LO_BITS) & !x & HI_BITS
 }

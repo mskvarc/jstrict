@@ -4,7 +4,7 @@ use std::fs;
 use std::path::Path;
 
 fn test<P: Clone + AsRef<Path> + Debug>(filename: P, options: Options) {
-	let buffer = fs::read(filename.clone()).unwrap();
+	let buffer = fs::read(filename).unwrap();
 	let input = if options.accept_invalid_codepoints {
 		String::from_utf8_lossy(&buffer)
 	} else {

@@ -3,7 +3,13 @@ use core::hash::{BuildHasher, Hash};
 use hashbrown::hash_table::Entry as TableEntry;
 use hashbrown::{DefaultHashBuilder, HashTable};
 
+/// Key lookup equivalence.
+///
+/// Lets an [`Object`](super::Object) be queried with any type that compares
+/// equal to its [`Key`], such as `str` or `String`. The blanket impl covers
+/// every `Q` a `Key` can be borrowed as.
 pub trait Equivalent<K: ?Sized> {
+	/// Checks if `self` is equivalent to `key`.
 	fn equivalent(&self, key: &K) -> bool;
 }
 
@@ -49,7 +55,7 @@ impl PartialEq for Indexes {
 impl Eq for Indexes {}
 
 impl Indexes {
-	fn new(rep: usize, hash: u64) -> Self {
+	const fn new(rep: usize, hash: u64) -> Self {
 		Self {
 			rep,
 			other: Vec::new(),
@@ -61,7 +67,7 @@ impl Indexes {
 		1 + self.other.len()
 	}
 
-	pub fn first(&self) -> usize {
+	pub const fn first(&self) -> usize {
 		self.rep
 	}
 
@@ -70,7 +76,7 @@ impl Indexes {
 	}
 
 	pub fn redundant(&self) -> Option<usize> {
-		self.other.first().cloned()
+		self.other.first().copied()
 	}
 
 	pub fn redundants(&self) -> &[usize] {

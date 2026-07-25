@@ -12,7 +12,7 @@ impl Value {
 	///   "bar": [2, 3]
 	/// });
 	///
-	/// // We convert the `serde_json` value into a `json_syntax` value.
+	/// // We convert the `serde_json` value into a `jstrict` value.
 	/// let b = jstrict::Value::from_serde_json(a);
 	///
 	/// // We convert it back into a `serde_json` value.
@@ -52,7 +52,7 @@ impl Value {
 	///   "bar": [2, 3]
 	/// });
 	///
-	/// // We convert the `serde_json` value into a `json_syntax` value.
+	/// // We convert the `serde_json` value into a `jstrict` value.
 	/// let b = jstrict::Value::from_serde_json(a);
 	///
 	/// // We convert it back into a `serde_json` value.

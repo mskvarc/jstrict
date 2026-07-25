@@ -13,7 +13,7 @@ impl Value {
 	///   "bar": [2, 3]
 	/// });
 	///
-	/// // We convert the `sonic_rs` value into a `json_syntax` value.
+	/// // We convert the `sonic_rs` value into a `jstrict` value.
 	/// let b = jstrict::Value::from_sonic_rs(a);
 	///
 	/// // We convert it back into a `sonic_rs` value.
@@ -53,7 +53,7 @@ impl Value {
 	///   "bar": [2, 3]
 	/// });
 	///
-	/// // We convert the `sonic_rs` value into a `json_syntax` value.
+	/// // We convert the `sonic_rs` value into a `jstrict` value.
 	/// let b = jstrict::Value::from_sonic_rs(a);
 	///
 	/// // We convert it back into a `sonic_rs` value.
@@ -108,10 +108,10 @@ mod tests {
 		)
 		.unwrap();
 
-		let mid = Value::from_sonic_rs(src.clone());
+		let mid = Value::from_sonic_rs(src);
 		let back = mid.into_sonic_rs();
 
-		assert_eq!(back.get("n").unwrap().is_null(), true);
+		assert!(back.get("n").unwrap().is_null());
 		assert_eq!(back.get("b").unwrap().as_bool(), Some(true));
 		assert_eq!(back.get("i").unwrap().as_i64(), Some(-7));
 		assert_eq!(back.get("u").unwrap().as_u64(), Some(42));

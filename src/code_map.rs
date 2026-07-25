@@ -1,13 +1,27 @@
+//! Mapping between JSON value fragments and the source text.
+//!
+//! Parsing a value with the [`Parse`](crate::Parse) trait returns a
+//! [`CodeMap`] alongside it. The code map is a flat list of [`Entry`], one per
+//! fragment, in the same depth-first order as [`Value::traverse`]: entry `i`
+//! describes the `i`-th fragment. This lets a caller report an error against
+//! the exact byte range of the offending value without keeping the source
+//! layout inside the value tree.
+//!
+//! [`Value::traverse`]: crate::Value::traverse
 use core::fmt;
 use std::{borrow::Borrow, ops::Deref};
 
 use locspan::Span;
 
 /// Code-map.
+///
+/// Maps each fragment of a parsed JSON value to its span in the source text.
+/// See the [module documentation](self).
 #[derive(Debug, Default, Clone)]
 pub struct CodeMap(Vec<Entry>);
 
 impl CodeMap {
+	/// Returns the entries of this code map as a slice, in fragment order.
 	pub fn as_slice(&self) -> &[Entry] {
 		&self.0
 	}
@@ -25,6 +39,8 @@ impl CodeMap {
 		self.0.get_mut(i)
 	}
 
+	/// Iterates over the entries of this code map, paired with their fragment
+	/// index.
 	pub fn iter(&self) -> Iter<'_> {
 		self.0.iter().enumerate()
 	}
@@ -50,8 +66,10 @@ impl Borrow<[Entry]> for CodeMap {
 	}
 }
 
+/// Borrowing iterator over the entries of a [`CodeMap`], with their index.
 pub type Iter<'a> = std::iter::Enumerate<std::slice::Iter<'a, Entry>>;
 
+/// Consuming iterator over the entries of a [`CodeMap`], with their index.
 pub type IntoIter = std::iter::Enumerate<std::vec::IntoIter<Entry>>;
 
 impl<'a> IntoIterator for &'a CodeMap {
@@ -85,19 +103,31 @@ pub struct Entry {
 }
 
 impl Entry {
-	pub fn new(span: Span, volume: usize) -> Self {
+	/// Creates a new code map entry from a source `span` and a fragment
+	/// `volume`.
+	pub const fn new(span: Span, volume: usize) -> Self {
 		Self { span, volume }
 	}
 }
 
+/// A value paired with the code map offset of the fragment it came from.
+///
+/// Used by the mapped accessors of [`Object`](crate::Object) and
+/// [`JsonArray`](crate::array::JsonArray), and as the error type of the
+/// [`TryFromJson`](crate::TryFromJson) implementations, so a failure can be
+/// traced back to a span.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Mapped<T> {
+	/// Offset of the fragment in the code map.
 	pub offset: usize,
+
+	/// The mapped value.
 	pub value: T,
 }
 
 impl<T> Mapped<T> {
-	pub fn new(offset: usize, value: T) -> Self {
+	/// Pairs `value` with the code map `offset` of its fragment.
+	pub const fn new(offset: usize, value: T) -> Self {
 		Self { offset, value }
 	}
 }

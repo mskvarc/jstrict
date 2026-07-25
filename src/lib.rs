@@ -1,40 +1,67 @@
-//! This library provides a strict JSON parser as defined by
+//! Strict JSON parsing and mapping.
+//!
+//! `jstrict` implements JSON exactly as specified by
 //! [RFC 8259](https://datatracker.ietf.org/doc/html/rfc8259) and
-//! [ECMA-404](https://www.ecma-international.org/publications-and-standards/standards/ecma-404/).
-//! Parsing values generates a [`CodeMap`] that keeps track of the position of
-//! each JSON value fragment in the parsed document.
+//! [ECMA-404](https://www.ecma-international.org/publications-and-standards/standards/ecma-404/),
+//! and preserves everything the standard leaves in the document: entry order,
+//! duplicate keys, and the lexical form of numbers. Parsing also produces a
+//! [`CodeMap`] recording the byte span of every value fragment, so errors and
+//! diagnostics can point back at the source text.
 //!
 //! # Features
 //!
-//! - Strict implementation of [RFC 8259](https://datatracker.ietf.org/doc/html/rfc8259) and
-//!   [ECMA-404](https://www.ecma-international.org/publications-and-standards/standards/ecma-404/).
-//! - No stack overflow, your memory is the limit.
-//! - Numbers are stored in lexical form, their precision is not limited.
-//! - Duplicate values are preserved. A JSON object is just a list of entries,
-//!   in the order of definition.
-//! - Strings are stored on the stack whenever possible, thanks to the [`smallstr`](https://crates.io/crates/smallstr) crate.
-//! - The parser is configurable to accept documents that do not strictly
-//!   adhere to the standard.
-//! - Highly configurable printing methods.
-//! - Macro to build any value statically.
-//! - JSON Canonicalization Scheme implementation ([RFC 8785](https://www.rfc-editor.org/rfc/rfc8785))
-//!   enabled with the `canonicalization` feature.
-//! - `serde` support (by enabling the `serde` feature).
-//! - Conversion from/to `serde_json::Value` (by enabling the `serde_json` feature).
-//! - Conversion from/to `sonic_rs::Value` (by enabling the `sonic-rs` feature).
-//! - Thoroughly tested.
+//! - Strict by default; the [`parse::Options`] type relaxes surrogate and
+//!   codepoint handling for documents that do not adhere to the standard.
+//! - No stack overflow: nesting depth is bounded by available memory, not by
+//!   the call stack.
+//! - Numbers are stored in lexical form, so precision is never lost. See
+//!   [`Number`].
+//! - Duplicate entries are preserved: an [`Object`] is a list of entries in
+//!   definition order, with an index for `O(1)` lookup.
+//! - Short strings, keys and numbers live on the stack (see
+//!   [`SMALL_STRING_CAPACITY`]).
+//! - Highly configurable printing, see [`Print`] and [`print::Options`].
+//! - [`json!`] builds any value from a JSON literal.
 //!
 //! # Usage
 //!
 //! ```
-//! use std::fs;
-//! use jstrict::{Value, Parse, Print};
+//! use jstrict::{Parse, Print, Value};
 //!
-//! let filename = "tests/inputs/y_structure_500_nested_arrays.json";
-//! let input = fs::read_to_string(filename).unwrap();
-//! let mut value = Value::parse_str(&input).expect("parse error").0;
-//! println!("value: {}", value.pretty_print());
+//! let (value, code_map) = Value::parse_str(r#"{ "a": 0, "b": [1, 2] }"#)?;
+//!
+//! let object = value.as_object().unwrap();
+//! assert_eq!(object.get_unique("a").unwrap().unwrap().to_string(), "0");
+//!
+//! // Fragment 0 is the whole object; fragment 3 is the `0` bound to `"a"`.
+//! assert_eq!(code_map[3].span.start(), 7);
+//!
+//! println!("{}", value.pretty_print());
+//! # Ok::<_, jstrict::parse::Error>(())
 //! ```
+//!
+//! When the code map is not needed, [`parse::parse_str_value`] takes the
+//! faster path that skips span tracking entirely:
+//!
+//! ```
+//! let value = jstrict::parse::parse_str_value("[1, 2, 3]")?;
+//! assert_eq!(value.as_array().unwrap().len(), 3);
+//! # Ok::<_, jstrict::parse::Error>(())
+//! ```
+//!
+//! # Feature flags
+//!
+//! | Flag           | Default | Enables                                                                          |
+//! | -------------- | :-----: | -------------------------------------------------------------------------------- |
+//! | `simdutf8`     |   yes   | SIMD-accelerated UTF-8 validation in the slice parser                            |
+//! | `canonicalize` |         | JSON Canonicalization Scheme, [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785) |
+//! | `serde`        |         | `Serialize` / `Deserialize`, plus `to_value` / `from_value`                      |
+//! | `serde_json`   |         | Conversion from/to `serde_json::Value`                                           |
+//! | `sonic-rs`     |         | Conversion from/to `sonic_rs::Value`                                             |
+//! | `contextual`   |         | `contextual::WithContext` printing adapters                                      |
+#![cfg_attr(docsrs, feature(doc_cfg), doc(auto_cfg))]
+#![warn(missing_docs)]
+
 pub mod number;
 pub use crate::number::{InvalidNumber, Number, Sign, TryFromFloatError};
 use smallvec::SmallVec;
@@ -169,6 +196,12 @@ pub enum Value {
 	Object(Object),
 }
 
+/// Returns the fragment of `array` at the given `index`, in traversal order.
+///
+/// The index is relative to the *contents* of the array: index `0` is the
+/// first fragment of the first item. On failure, returns the number of
+/// fragments left to skip past the end of `array`, so callers can chain
+/// lookups across sibling values.
 pub fn get_array_fragment(array: &[Value], mut index: usize) -> Result<FragmentRef<'_>, usize> {
 	for v in array {
 		match v.get_fragment(index) {
@@ -181,6 +214,12 @@ pub fn get_array_fragment(array: &[Value], mut index: usize) -> Result<FragmentR
 }
 
 impl Value {
+	/// Returns the fragment at the given `index` in traversal order, where
+	/// index `0` is `self`.
+	///
+	/// Fragment indices match [`CodeMap`] offsets: the fragment returned for
+	/// index `i` is described by `code_map[offset + i]`. On failure, returns
+	/// the number of fragments left to skip.
 	pub fn get_fragment(&self, index: usize) -> Result<FragmentRef<'_>, usize> {
 		if index == 0 {
 			Ok(FragmentRef::Value(self))
@@ -193,8 +232,9 @@ impl Value {
 		}
 	}
 
+	/// Returns the [`Kind`] of this value.
 	#[inline]
-	pub fn kind(&self) -> Kind {
+	pub const fn kind(&self) -> Kind {
 		match self {
 			Self::Null => Kind::Null,
 			Self::Boolean(_) => Kind::Boolean,
@@ -205,38 +245,45 @@ impl Value {
 		}
 	}
 
+	/// Checks if this value is of the given `kind`.
 	#[inline]
 	pub fn is_kind(&self, kind: Kind) -> bool {
 		self.kind() == kind
 	}
 
+	/// Checks if this value is `null`.
 	#[inline]
-	pub fn is_null(&self) -> bool {
+	pub const fn is_null(&self) -> bool {
 		matches!(self, Self::Null)
 	}
 
+	/// Checks if this value is a boolean.
 	#[inline]
-	pub fn is_boolean(&self) -> bool {
+	pub const fn is_boolean(&self) -> bool {
 		matches!(self, Self::Boolean(_))
 	}
 
+	/// Checks if this value is a number.
 	#[inline]
-	pub fn is_number(&self) -> bool {
+	pub const fn is_number(&self) -> bool {
 		matches!(self, Self::Number(_))
 	}
 
+	/// Checks if this value is a string.
 	#[inline]
-	pub fn is_string(&self) -> bool {
+	pub const fn is_string(&self) -> bool {
 		matches!(self, Self::String(_))
 	}
 
+	/// Checks if this value is an array.
 	#[inline]
-	pub fn is_array(&self) -> bool {
+	pub const fn is_array(&self) -> bool {
 		matches!(self, Self::Array(_))
 	}
 
+	/// Checks if this value is an object.
 	#[inline]
-	pub fn is_object(&self) -> bool {
+	pub const fn is_object(&self) -> bool {
 		matches!(self, Self::Object(_))
 	}
 
@@ -250,22 +297,25 @@ impl Value {
 		}
 	}
 
+	/// Returns this value as a `bool`, if it is a boolean.
 	#[inline]
-	pub fn as_boolean(&self) -> Option<bool> {
+	pub const fn as_boolean(&self) -> Option<bool> {
 		match self {
 			Self::Boolean(b) => Some(*b),
 			_ => None,
 		}
 	}
 
+	/// Returns a mutable reference to the inner `bool`, if this is a boolean.
 	#[inline]
-	pub fn as_boolean_mut(&mut self) -> Option<&mut bool> {
+	pub const fn as_boolean_mut(&mut self) -> Option<&mut bool> {
 		match self {
 			Self::Boolean(b) => Some(b),
 			_ => None,
 		}
 	}
 
+	/// Returns this value as a [`Number`], if it is a number.
 	#[inline]
 	pub fn as_number(&self) -> Option<&Number> {
 		match self {
@@ -274,14 +324,17 @@ impl Value {
 		}
 	}
 
+	/// Returns a mutable reference to the inner number buffer, if this is a
+	/// number.
 	#[inline]
-	pub fn as_number_mut(&mut self) -> Option<&mut NumberBuf> {
+	pub const fn as_number_mut(&mut self) -> Option<&mut NumberBuf> {
 		match self {
 			Self::Number(n) => Some(n),
 			_ => None,
 		}
 	}
 
+	/// Returns this value as a `&str`, if it is a string.
 	#[inline]
 	pub fn as_string(&self) -> Option<&str> {
 		match self {
@@ -296,14 +349,16 @@ impl Value {
 		self.as_string()
 	}
 
+	/// Returns a mutable reference to the inner string, if this is a string.
 	#[inline]
-	pub fn as_string_mut(&mut self) -> Option<&mut String> {
+	pub const fn as_string_mut(&mut self) -> Option<&mut String> {
 		match self {
 			Self::String(s) => Some(s),
 			_ => None,
 		}
 	}
 
+	/// Returns this value as a slice of values, if it is an array.
 	#[inline]
 	pub fn as_array(&self) -> Option<&[Self]> {
 		match self {
@@ -312,8 +367,9 @@ impl Value {
 		}
 	}
 
+	/// Returns a mutable reference to the inner array, if this is an array.
 	#[inline]
-	pub fn as_array_mut(&mut self) -> Option<&mut Array> {
+	pub const fn as_array_mut(&mut self) -> Option<&mut Array> {
 		match self {
 			Self::Array(a) => Some(a),
 			_ => None,
@@ -332,22 +388,25 @@ impl Value {
 		}
 	}
 
+	/// Returns this value as an [`Object`], if it is an object.
 	#[inline]
-	pub fn as_object(&self) -> Option<&Object> {
+	pub const fn as_object(&self) -> Option<&Object> {
 		match self {
 			Self::Object(o) => Some(o),
 			_ => None,
 		}
 	}
 
+	/// Returns a mutable reference to the inner object, if this is an object.
 	#[inline]
-	pub fn as_object_mut(&mut self) -> Option<&mut Object> {
+	pub const fn as_object_mut(&mut self) -> Option<&mut Object> {
 		match self {
 			Self::Object(o) => Some(o),
 			_ => None,
 		}
 	}
 
+	/// Consumes this value, returning the inner `bool` if it is a boolean.
 	#[inline]
 	pub fn into_boolean(self) -> Option<bool> {
 		match self {
@@ -356,6 +415,7 @@ impl Value {
 		}
 	}
 
+	/// Consumes this value, returning the inner number if it is a number.
 	#[inline]
 	pub fn into_number(self) -> Option<NumberBuf> {
 		match self {
@@ -364,6 +424,7 @@ impl Value {
 		}
 	}
 
+	/// Consumes this value, returning the inner string if it is a string.
 	#[inline]
 	pub fn into_string(self) -> Option<String> {
 		match self {
@@ -372,6 +433,7 @@ impl Value {
 		}
 	}
 
+	/// Consumes this value, returning the inner array if it is an array.
 	#[inline]
 	pub fn into_array(self) -> Option<Array> {
 		match self {
@@ -380,6 +442,7 @@ impl Value {
 		}
 	}
 
+	/// Consumes this value, returning the inner object if it is an object.
 	#[inline]
 	pub fn into_object(self) -> Option<Object> {
 		match self {
@@ -388,6 +451,11 @@ impl Value {
 		}
 	}
 
+	/// Returns an iterator over every fragment of this value, in depth-first
+	/// order, paired with its index.
+	///
+	/// The index of each fragment is its offset in the [`CodeMap`] produced
+	/// when the value was parsed.
 	pub fn traverse(&self) -> Traverse<'_> {
 		let mut stack = SmallVec::new();
 		stack.push(FragmentRef::Value(self));
@@ -411,7 +479,7 @@ impl Value {
 
 	/// Move and return the value, leaves `null` in its place.
 	#[inline(always)]
-	pub fn take(&mut self) -> Self {
+	pub const fn take(&mut self) -> Self {
 		let mut result = Self::Null;
 		std::mem::swap(&mut result, self);
 		result
@@ -583,46 +651,65 @@ try_from_float! {
 	f64
 }
 
+/// Reference to a fragment of a JSON value.
+///
+/// A *fragment* is anything the parser assigns a source span to: a value, an
+/// object entry, or an object key. Fragments are what [`Value::traverse`]
+/// yields and what a [`CodeMap`] describes.
 pub enum FragmentRef<'a> {
+	/// A JSON value.
 	Value(&'a Value),
+
+	/// An object entry, spanning both its key and its value.
 	Entry(&'a object::Entry),
+
+	/// An object key.
 	Key(&'a object::Key),
 }
 
 impl<'a> FragmentRef<'a> {
-	pub fn is_entry(&self) -> bool {
+	/// Checks if this fragment is an object entry.
+	pub const fn is_entry(&self) -> bool {
 		matches!(self, Self::Entry(_))
 	}
 
-	pub fn is_key(&self) -> bool {
+	/// Checks if this fragment is an object key.
+	pub const fn is_key(&self) -> bool {
 		matches!(self, Self::Key(_))
 	}
 
-	pub fn is_value(&self) -> bool {
+	/// Checks if this fragment is a value.
+	pub const fn is_value(&self) -> bool {
 		matches!(self, Self::Value(_))
 	}
 
-	pub fn is_null(&self) -> bool {
+	/// Checks if this fragment is the `null` value.
+	pub const fn is_null(&self) -> bool {
 		matches!(self, Self::Value(Value::Null))
 	}
 
-	pub fn is_number(&self) -> bool {
+	/// Checks if this fragment is a number value.
+	pub const fn is_number(&self) -> bool {
 		matches!(self, Self::Value(Value::Number(_)))
 	}
 
-	pub fn is_string(&self) -> bool {
+	/// Checks if this fragment is a string value.
+	pub const fn is_string(&self) -> bool {
 		matches!(self, Self::Value(Value::String(_)))
 	}
 
-	pub fn is_array(&self) -> bool {
+	/// Checks if this fragment is an array value.
+	pub const fn is_array(&self) -> bool {
 		matches!(self, Self::Value(Value::Array(_)))
 	}
 
-	pub fn is_object(&self) -> bool {
+	/// Checks if this fragment is an object value.
+	pub const fn is_object(&self) -> bool {
 		matches!(self, Self::Value(Value::Object(_)))
 	}
 
-	pub fn strip(self) -> FragmentRef<'a> {
+	/// Returns this fragment reference unchanged.
+	pub const fn strip(self) -> FragmentRef<'a> {
 		match self {
 			Self::Value(v) => FragmentRef::Value(v),
 			Self::Entry(e) => FragmentRef::Entry(e),
@@ -640,6 +727,7 @@ impl<'a> Clone for FragmentRef<'a> {
 impl<'a> Copy for FragmentRef<'a> {}
 
 impl<'a> FragmentRef<'a> {
+	/// Returns an iterator over the direct sub-fragments of this fragment.
 	pub fn sub_fragments(&self) -> SubFragments<'a> {
 		match self {
 			Self::Value(Value::Array(a)) => SubFragments::Array(a.iter()),
@@ -650,10 +738,18 @@ impl<'a> FragmentRef<'a> {
 	}
 }
 
+/// Iterator over the direct sub-fragments of a [`FragmentRef`].
 pub enum SubFragments<'a> {
+	/// The fragment is a leaf: it has no sub-fragments.
 	None,
+
+	/// Sub-fragments of an array: its items.
 	Array(core::slice::Iter<'a, Value>),
+
+	/// Sub-fragments of an object: its entries.
 	Object(core::slice::Iter<'a, object::Entry>),
+
+	/// Sub-fragments of an object entry: its key, then its value.
 	Entry(Option<&'a object::Key>, Option<&'a Value>),
 }
 
@@ -687,6 +783,9 @@ impl<'a> DoubleEndedIterator for SubFragments<'a> {
 	}
 }
 
+/// Depth-first iterator over every fragment of a [`Value`], with its index.
+///
+/// Returned by [`Value::traverse`].
 pub struct Traverse<'a> {
 	offset: usize,
 	stack: SmallVec<[FragmentRef<'a>; 8]>,

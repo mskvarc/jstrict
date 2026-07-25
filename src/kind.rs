@@ -2,13 +2,33 @@
 use core::fmt;
 
 /// Value kind.
+///
+/// The six kinds of JSON value. `Kind` values combine with `|` and `&` into a
+/// [`KindSet`], which is how expected-kind errors are reported.
+///
+/// ```
+/// # use jstrict::{Kind, KindSet};
+/// let expected: KindSet = Kind::Number | Kind::String;
+/// assert_eq!(expected.as_disjunction().to_string(), "number or string");
+/// ```
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub enum Kind {
+	/// The `null` value.
 	Null,
+
+	/// A boolean, `true` or `false`.
 	Boolean,
+
+	/// A number.
 	Number,
+
+	/// A string.
 	String,
+
+	/// An array.
 	Array,
+
+	/// An object.
 	Object,
 }
 
@@ -65,9 +85,11 @@ macro_rules! kind_set {
 
 		impl KindSet {
 			$(
+				#[doc = concat!("Set containing only [`Kind::", stringify!($id), "`].")]
 				pub const $const: Self = Self($mask);
 			)*
 
+			/// Set containing every [`Kind`].
 			pub const fn all() -> Self {
 				Self($($mask)|*)
 			}
@@ -127,6 +149,7 @@ macro_rules! kind_set {
 			}
 		}
 
+		/// Iterator over the [`Kind`]s of a [`KindSet`], in declaration order.
 		#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 		pub struct KindSetIter(u8);
 
@@ -182,19 +205,23 @@ kind_set! {
 }
 
 impl KindSet {
+	/// The empty set.
 	pub const fn none() -> Self {
 		Self(0)
 	}
 
+	/// Returns the number of kinds in this set.
 	pub const fn len(&self) -> usize {
 		self.0.count_ones() as usize
 	}
 
+	/// Checks if this set is empty.
 	pub const fn is_empty(&self) -> bool {
 		self.0 == 0
 	}
 
-	pub fn iter(&self) -> KindSetIter {
+	/// Iterates over the kinds in this set, in declaration order.
+	pub const fn iter(&self) -> KindSetIter {
 		KindSetIter(self.0)
 	}
 
@@ -210,7 +237,7 @@ impl KindSet {
 	/// assert_eq!(KindSet::all().as_disjunction().to_string(), "anything");
 	/// assert_eq!(KindSet::none().as_disjunction().to_string(), "nothing");
 	/// ```
-	pub fn as_disjunction(self) -> KindSetDisjunction {
+	pub const fn as_disjunction(self) -> KindSetDisjunction {
 		KindSetDisjunction(self)
 	}
 
@@ -226,7 +253,7 @@ impl KindSet {
 	/// assert_eq!(KindSet::all().as_conjunction().to_string(), "anything");
 	/// assert_eq!(KindSet::none().as_conjunction().to_string(), "nothing");
 	/// ```
-	pub fn as_conjunction(self) -> KindSetConjunction {
+	pub const fn as_conjunction(self) -> KindSetConjunction {
 		KindSetConjunction(self)
 	}
 }

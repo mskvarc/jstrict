@@ -24,7 +24,7 @@ impl Value {
 	}
 
 	#[cold]
-	fn unexpected(&self) -> Unexpected {
+	fn unexpected(&self) -> Unexpected<'_> {
 		match self {
 			Self::Null => Unexpected::Unit,
 			Self::Boolean(b) => Unexpected::Bool(*b),
@@ -252,9 +252,13 @@ impl<'de> IntoDeserializer<'de, DeserializeError> for Object {
 	}
 }
 
+/// Error returned when deserializing a type from a [`Value`].
 #[derive(Debug, Clone)]
 pub enum DeserializeError {
+	/// Error reported by the `Deserialize` implementation.
 	Custom(String),
+
+	/// A map key was not a string, which JSON cannot represent.
 	NonStringKey,
 }
 

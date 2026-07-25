@@ -1,3 +1,13 @@
+//! JSON parsing.
+//!
+//! [`Parse`] is the entry point: `Value::parse_str`, `Value::parse_slice` and
+//! friends return the parsed value together with a
+//! [`CodeMap`]. When the code map is not needed, the
+//! [`parse_str_value`] / [`parse_slice_value`] functions take a faster path
+//! that skips span tracking.
+//!
+//! Parsing is strict by default; [`Options`] relaxes surrogate and codepoint
+//! handling.
 use decoded_char::DecodedChar;
 use locspan::{Meta, Span};
 use std::fmt;
@@ -34,7 +44,7 @@ impl Options {
 	/// Strict mode.
 	///
 	/// All options are set to `false`.
-	pub fn strict() -> Self {
+	pub const fn strict() -> Self {
 		Self {
 			accept_truncated_surrogate_pair: false,
 			accept_invalid_codepoints: false,
@@ -44,7 +54,7 @@ impl Options {
 	/// Flexible mode.
 	///
 	/// All options are set to `true`.
-	pub fn flexible() -> Self {
+	pub const fn flexible() -> Self {
 		Self {
 			accept_truncated_surrogate_pair: true,
 			accept_invalid_codepoints: true,
@@ -86,25 +96,44 @@ pub fn parse_slice_value_with(content: &[u8], options: Options) -> Result<Value,
 	Ok(value)
 }
 
+/// JSON parsing methods.
+///
+/// Every method returns the parsed value together with the [`CodeMap`]
+/// describing where each of its fragments came from.
+///
+/// # Example
+///
+/// ```
+/// use jstrict::{Parse, Value};
+///
+/// let (value, code_map) = Value::parse_str("[1, 2]")?;
+/// assert_eq!(code_map.len(), 3); // the array and its two items.
+/// # Ok::<_, jstrict::parse::Error>(())
+/// ```
 pub trait Parse: Sized {
+	/// Parses a value from a UTF-8 byte slice.
 	fn parse_slice(content: &[u8]) -> Result<(Self, CodeMap), Error> {
 		Self::parse_utf8(utf8_decode::Decoder::new(content.iter().copied()))
 			.map_err(Error::io_into_utf8)
 	}
 
+	/// Parses a value from a UTF-8 byte slice, with the given `options`.
 	fn parse_slice_with(content: &[u8], options: Options) -> Result<(Self, CodeMap), Error> {
 		Self::parse_utf8_with(utf8_decode::Decoder::new(content.iter().copied()), options)
 			.map_err(Error::io_into_utf8)
 	}
 
+	/// Parses a value from a string.
 	fn parse_str(content: &str) -> Result<(Self, CodeMap), Error> {
 		Self::parse_utf8(content.chars().map(Ok))
 	}
 
+	/// Parses a value from a string, with the given `options`.
 	fn parse_str_with(content: &str, options: Options) -> Result<(Self, CodeMap), Error> {
 		Self::parse_utf8_with(content.chars().map(Ok), options)
 	}
 
+	/// Parses a value from an infallible iterator of UTF-8 characters.
 	fn parse_infallible_utf8<C>(chars: C) -> Result<(Self, CodeMap), Error>
 	where
 		C: Iterator<Item = char>,
@@ -112,6 +141,8 @@ pub trait Parse: Sized {
 		Self::parse_infallible(chars.map(DecodedChar::from_utf8))
 	}
 
+	/// Parses a value from an infallible iterator of UTF-8 characters, with
+	/// the given `options`.
 	fn parse_utf8_infallible_with<C>(chars: C, options: Options) -> Result<(Self, CodeMap), Error>
 	where
 		C: Iterator<Item = char>,
@@ -119,6 +150,9 @@ pub trait Parse: Sized {
 		Self::parse_infallible_with(chars.map(DecodedChar::from_utf8), options)
 	}
 
+	/// Parses a value from a fallible iterator of UTF-8 characters.
+	///
+	/// Stream errors of type `E` are wrapped in [`Error::Stream`].
 	fn parse_utf8<C, E>(chars: C) -> Result<(Self, CodeMap), Error<E>>
 	where
 		C: Iterator<Item = Result<char, E>>,
@@ -126,6 +160,8 @@ pub trait Parse: Sized {
 		Self::parse(chars.map(|c| c.map(DecodedChar::from_utf8)))
 	}
 
+	/// Parses a value from a fallible iterator of UTF-8 characters, with the
+	/// given `options`.
 	fn parse_utf8_with<C, E>(chars: C, options: Options) -> Result<(Self, CodeMap), Error<E>>
 	where
 		C: Iterator<Item = Result<char, E>>,
@@ -133,6 +169,11 @@ pub trait Parse: Sized {
 		Self::parse_with(chars.map(|c| c.map(DecodedChar::from_utf8)), options)
 	}
 
+	/// Parses a value from an infallible iterator of decoded characters.
+	///
+	/// Unlike the `utf8` variants, [`DecodedChar`] carries the byte length of
+	/// each character in the *source* encoding, so spans stay accurate when
+	/// the input is not UTF-8.
 	fn parse_infallible<C>(chars: C) -> Result<(Self, CodeMap), Error>
 	where
 		C: Iterator<Item = DecodedChar>,
@@ -142,6 +183,8 @@ pub trait Parse: Sized {
 		Ok((value, parser.code_map))
 	}
 
+	/// Parses a value from an infallible iterator of decoded characters, with
+	/// the given `options`.
 	fn parse_infallible_with<C>(chars: C, options: Options) -> Result<(Self, CodeMap), Error>
 	where
 		C: Iterator<Item = DecodedChar>,
@@ -151,6 +194,7 @@ pub trait Parse: Sized {
 		Ok((value, parser.code_map))
 	}
 
+	/// Parses a value from a fallible iterator of decoded characters.
 	fn parse<C, E>(chars: C) -> Result<(Self, CodeMap), Error<E>>
 	where
 		C: Iterator<Item = Result<DecodedChar, E>>,
@@ -160,6 +204,8 @@ pub trait Parse: Sized {
 		Ok((value, parser.code_map))
 	}
 
+	/// Parses a value from a fallible iterator of decoded characters, with the
+	/// given `options`.
 	fn parse_with<C, E>(chars: C, options: Options) -> Result<(Self, CodeMap), Error<E>>
 	where
 		C: Iterator<Item = Result<DecodedChar, E>>,
@@ -169,6 +215,12 @@ pub trait Parse: Sized {
 		Ok((value, parser.code_map))
 	}
 
+	/// Parses a value in the middle of an ongoing parse, using `parser` and
+	/// the surrounding [`Context`].
+	///
+	/// Returns the value along with the index of its code map fragment. This
+	/// is the single method implementors must provide; everything else is a
+	/// wrapper around it.
 	fn parse_in<C, E>(
 		parser: &mut Parser<C, E>,
 		context: Context,
@@ -197,11 +249,12 @@ pub struct Parser<C: Iterator<Item = Result<DecodedChar, E>>, E> {
 
 /// Checks if the given char `c` is a JSON whitespace.
 #[inline(always)]
-pub fn is_whitespace(c: char) -> bool {
+pub const fn is_whitespace(c: char) -> bool {
 	matches!(c, ' ' | '\t' | '\r' | '\n')
 }
 
 impl<C: Iterator<Item = Result<DecodedChar, E>>, E> Parser<C, E> {
+	/// Creates a new parser over `chars`, in strict mode.
 	pub fn new(chars: C) -> Self {
 		Self {
 			chars,
@@ -212,6 +265,7 @@ impl<C: Iterator<Item = Result<DecodedChar, E>>, E> Parser<C, E> {
 		}
 	}
 
+	/// Creates a new parser over `chars`, with the given `options`.
 	pub fn new_with(chars: C, options: Options) -> Self {
 		Self {
 			chars,
@@ -314,11 +368,12 @@ pub enum Error<E = core::convert::Infallible> {
 impl<E> Error<E> {
 	/// Creates an `Unexpected` error.
 	#[inline(always)]
-	fn unexpected(position: usize, c: Option<char>) -> Self {
+	const fn unexpected(position: usize, c: Option<char>) -> Self {
 		// panic!("unexpected {:?}", c);
 		Self::Unexpected(position, c)
 	}
 
+	/// Returns the byte position at which the error occurred.
 	pub fn position(&self) -> usize {
 		match self {
 			Self::Stream(p, _) => *p,
@@ -330,6 +385,9 @@ impl<E> Error<E> {
 		}
 	}
 
+	/// Returns the byte span the error covers.
+	///
+	/// Errors that point at a single position return an empty span there.
 	pub fn span(&self) -> Span {
 		match self {
 			Self::Stream(p, _) => Span::new(*p, *p),
@@ -343,7 +401,7 @@ impl<E> Error<E> {
 }
 
 impl Error<utf8_decode::Utf8Error> {
-	fn io_into_utf8(self) -> Error {
+	const fn io_into_utf8(self) -> Error {
 		match self {
 			Self::Stream(p, _) => Error::InvalidUtf8(p),
 			Self::Unexpected(p, e) => Error::Unexpected(p, e),
@@ -383,15 +441,22 @@ impl<E: 'static + std::error::Error> std::error::Error for Error<E> {
 /// Defines what characters are allowed after a value.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Context {
+	/// Top level: only whitespace may follow the value.
 	None,
+
+	/// Inside an array: `,` or `]` may follow the value.
 	Array,
+
+	/// An object key: `:` may follow the value.
 	ObjectKey,
+
+	/// An object entry value: `,` or `}` may follow the value.
 	ObjectValue,
 }
 
 impl Context {
 	/// Checks if the given character `c` can follow a value in this context.
-	pub fn follows(&self, c: char) -> bool {
+	pub const fn follows(&self, c: char) -> bool {
 		match self {
 			Self::None => is_whitespace(c),
 			Self::Array => is_whitespace(c) || matches!(c, ',' | ']'),

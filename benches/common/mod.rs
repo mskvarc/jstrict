@@ -8,11 +8,11 @@ pub const SEED: u64 = 0xC0FFEE;
 pub struct Rng(u64);
 
 impl Rng {
-	pub fn new(seed: u64) -> Self {
+	pub const fn new(seed: u64) -> Self {
 		Self(if seed == 0 { 1 } else { seed })
 	}
 
-	pub fn next(&mut self) -> u64 {
+	pub const fn next(&mut self) -> u64 {
 		let mut x = self.0;
 		x ^= x << 13;
 		x ^= x >> 7;
@@ -21,11 +21,11 @@ impl Rng {
 		x
 	}
 
-	pub fn range(&mut self, n: u64) -> u64 {
+	pub const fn range(&mut self, n: u64) -> u64 {
 		self.next() % n
 	}
 
-	pub fn boolean(&mut self) -> bool {
+	pub const fn boolean(&mut self) -> bool {
 		self.next() & 1 == 1
 	}
 
@@ -47,7 +47,12 @@ fn write_record(s: &mut String, rng: &mut Rng) {
 	let active = rng.boolean();
 	let score = (rng.range(1_000_000)) as f64 / 1000.0;
 	let tags_n = rng.range(5) as usize;
-	write!(s, r#"{{"id":{},"active":{},"score":{},"name":""#, id, active, score).unwrap();
+	write!(
+		s,
+		r#"{{"id":{},"active":{},"score":{},"name":""#,
+		id, active, score
+	)
+	.unwrap();
 	push_word(s, rng, 4, 14);
 	s.push_str(r#"","tags":["#);
 	for i in 0..tags_n {
@@ -81,9 +86,7 @@ fn write_record(s: &mut String, rng: &mut Rng) {
 pub fn mixed(target_bytes: usize) -> String {
 	let mut rng = Rng::new(SEED);
 	let mut s = String::with_capacity(target_bytes + 128);
-	s.push_str(
-		r#"{"meta":{"version":1,"generated_at":"2026-05-01T00:00:00Z"},"records":["#,
-	);
+	s.push_str(r#"{"meta":{"version":1,"generated_at":"2026-05-01T00:00:00Z"},"records":["#);
 	let mut first = true;
 	while s.len() < target_bytes {
 		if !first {
