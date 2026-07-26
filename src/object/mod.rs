@@ -818,12 +818,12 @@ impl Object {
 	///
 	/// Entries with the same key are sorted by value.
 	pub fn sort(&mut self) {
-		self.entries.sort();
-		self.indexes.clear();
-
-		for i in 0..self.entries.len() {
-			self.indexes.insert(&self.entries, i);
-		}
+		// `Entry: Ord` compares key then value, so entries comparing equal are
+		// wholly equal and their relative order is unobservable. That makes an
+		// unstable sort sound here, and it avoids the auxiliary allocation a
+		// stable sort needs.
+		self.entries.sort_unstable();
+		self.indexes.rebuild_sorted(&self.entries);
 	}
 
 	/// Puts this JSON object in canonical form according to

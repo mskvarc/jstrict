@@ -282,8 +282,37 @@ impl<S: BuildHasher> IndexMap<S> {
 		}
 	}
 
-	pub fn clear(&mut self) {
-		self.table.clear()
+	/// Rebuilds the whole table from `entries`, which **must** be sorted by key.
+	///
+	/// Sorting groups equal keys into contiguous runs, which lets this skip work
+	/// that [`insert`](Self::insert) has to do per entry:
+	///
+	/// - each distinct key is hashed once, not once per entry sharing it;
+	/// - each run needs a single `insert_unique` rather than a probe per entry,
+	///   because a run cannot collide with an already-inserted key;
+	/// - indexes within a run arrive in ascending order, so `other` is filled by
+	///   `extend` instead of the `binary_search` + `Vec::insert` pair in
+	///   [`Indexes::insert`], which is quadratic in the length of the run.
+	pub fn rebuild_sorted(&mut self, entries: &[Entry]) {
+		self.table.clear();
+		self.table.reserve(entries.len(), make_hasher());
+
+		let mut run_start = 0;
+		while run_start < entries.len() {
+			let key = &entries[run_start].key;
+			let mut run_end = run_start + 1;
+			while run_end < entries.len() && entries[run_end].key == *key {
+				run_end += 1;
+			}
+
+			let hash = self.hash_builder.hash_one(key);
+			let mut indexes = Indexes::new(run_start, hash);
+			indexes.other.reserve_exact(run_end - run_start - 1);
+			indexes.other.extend(run_start + 1..run_end);
+			self.table.insert_unique(hash, indexes, make_hasher());
+
+			run_start = run_end;
+		}
 	}
 }
 
