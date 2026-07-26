@@ -818,8 +818,7 @@ impl Object {
 	///
 	/// Entries with the same key are sorted by value.
 	pub fn sort(&mut self) {
-		use locspan::BorrowStripped;
-		self.entries.sort_by(|a, b| a.stripped().cmp(b.stripped()));
+		self.entries.sort();
 		self.indexes.clear();
 
 		for i in 0..self.entries.len() {

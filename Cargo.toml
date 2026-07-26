@@ -45,7 +45,7 @@ decoded-char = "0.1.1"
 hashbrown = "0.17.1"
 json-escape-simd = "3.1.1"
 lexical = { version = "7.0.5", features = ["format"] }
-locspan = "0.8.2"
+locspan = "0.9.2"
 memchr = "2.8.3"
 ryu-js = { version = "1.0.3", optional = true }
 serde = { version = "1.0.229", optional = true }

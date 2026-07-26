@@ -9,7 +9,7 @@
 //! Parsing is strict by default; [`Options`] relaxes surrogate and codepoint
 //! handling.
 use decoded_char::DecodedChar;
-use locspan::{Meta, Span};
+use locspan::Span;
 use std::fmt;
 
 mod array;
@@ -179,7 +179,7 @@ pub trait Parse: Sized {
 		C: Iterator<Item = DecodedChar>,
 	{
 		let mut parser = Parser::new(chars.map(Ok));
-		let value = Self::parse_in(&mut parser, Context::None)?.into_value();
+		let value = Self::parse_in(&mut parser, Context::None)?.0;
 		Ok((value, parser.code_map))
 	}
 
@@ -190,7 +190,7 @@ pub trait Parse: Sized {
 		C: Iterator<Item = DecodedChar>,
 	{
 		let mut parser = Parser::new_with(chars.map(Ok), options);
-		let value = Self::parse_in(&mut parser, Context::None)?.into_value();
+		let value = Self::parse_in(&mut parser, Context::None)?.0;
 		Ok((value, parser.code_map))
 	}
 
@@ -200,7 +200,7 @@ pub trait Parse: Sized {
 		C: Iterator<Item = Result<DecodedChar, E>>,
 	{
 		let mut parser = Parser::new(chars);
-		let value = Self::parse_in(&mut parser, Context::None)?.into_value();
+		let value = Self::parse_in(&mut parser, Context::None)?.0;
 		Ok((value, parser.code_map))
 	}
 
@@ -211,7 +211,7 @@ pub trait Parse: Sized {
 		C: Iterator<Item = Result<DecodedChar, E>>,
 	{
 		let mut parser = Parser::new_with(chars, options);
-		let value = Self::parse_in(&mut parser, Context::None)?.into_value();
+		let value = Self::parse_in(&mut parser, Context::None)?.0;
 		Ok((value, parser.code_map))
 	}
 
@@ -224,7 +224,7 @@ pub trait Parse: Sized {
 	fn parse_in<C, E>(
 		parser: &mut Parser<C, E>,
 		context: Context,
-	) -> Result<Meta<Self, usize>, Error<E>>
+	) -> Result<(Self, usize), Error<E>>
 	where
 		C: Iterator<Item = Result<DecodedChar, E>>;
 }
@@ -283,7 +283,7 @@ impl<C: Iterator<Item = Result<DecodedChar, E>>, E> Parser<C, E> {
 	fn end_fragment(&mut self, i: usize) {
 		let entry_count = self.code_map.len();
 		let entry = self.code_map.get_mut(i).unwrap();
-		entry.span.set_end(self.position);
+		entry.span.end = self.position;
 		entry.volume = entry_count - i;
 	}
 
@@ -374,13 +374,13 @@ impl<E> Error<E> {
 	}
 
 	/// Returns the byte position at which the error occurred.
-	pub fn position(&self) -> usize {
+	pub const fn position(&self) -> usize {
 		match self {
 			Self::Stream(p, _) => *p,
 			Self::Unexpected(p, _) => *p,
-			Self::InvalidUnicodeCodePoint(span, _) => span.start(),
-			Self::MissingLowSurrogate(span, _) => span.start(),
-			Self::InvalidLowSurrogate(span, _, _) => span.start(),
+			Self::InvalidUnicodeCodePoint(span, _) => span.start,
+			Self::MissingLowSurrogate(span, _) => span.start,
+			Self::InvalidLowSurrogate(span, _, _) => span.start,
 			Self::InvalidUtf8(p) => *p,
 		}
 	}

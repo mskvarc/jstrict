@@ -51,7 +51,7 @@ impl Mapper for Recording {
 	fn end_fragment(&mut self, idx: usize, end_pos: usize) {
 		let entry_count = self.code_map.len();
 		let entry = self.code_map.get_mut(idx).unwrap();
-		entry.span.set_end(end_pos);
+		entry.span.end = end_pos;
 		entry.volume = entry_count - idx;
 	}
 }

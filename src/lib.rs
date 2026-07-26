@@ -34,7 +34,7 @@
 //! assert_eq!(object.get_unique("a").unwrap().unwrap().to_string(), "0");
 //!
 //! // Fragment 0 is the whole object; fragment 3 is the `0` bound to `"a"`.
-//! assert_eq!(code_map[3].span.start(), 7);
+//! assert_eq!(code_map[3].span.start, 7);
 //!
 //! println!("{}", value.pretty_print());
 //! # Ok::<_, jstrict::parse::Error>(())
@@ -74,6 +74,10 @@ pub mod object;
 pub mod parse;
 mod unordered;
 pub use code_map::CodeMap;
+// `CodeMap` entries expose a `locspan::Span` field, so the type is part of this
+// crate's public API and is re-exported here: consumers must not have to add
+// their own `locspan` dependency, nor match its major version, to read a span.
+pub use locspan::Span;
 pub use parse::Parse;
 pub mod print;
 pub use print::Print;
