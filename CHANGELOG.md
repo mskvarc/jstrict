@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.14.0] - 2026-07-26
+
+### ⚡ Performance
+- Rebuild object index in one pass after sorting
+
+### 🔧 Refactor
+- Drop locspan Meta, move to locspan 0.9.2 ⚠️ **BREAKING**
+- Drop locspan-derive dependency
+
+### 🧹 Chores
+- Move to locspan 1.0.0, msrv 1.96.0 ⚠️ **BREAKING**
+
 ## [v0.13.0] - 2026-07-25
 
 ### ⚡ Performance
@@ -23,6 +35,7 @@ All notable changes to this project will be documented in this file.
 - Add benchmarks
 
 ### 🧹 Chores
+- Changelog
 - Update dependencies
 - Polish
 - Update dependencies
