@@ -1,5 +1,5 @@
-use super::{array, object, Context, Error, Parse, Parser};
-use crate::{object::Key, Array, NumberBuf, Object, String, Value};
+use super::{Context, Error, Parse, Parser, array, object};
+use crate::{Array, NumberBuf, Object, String, Value, object::Key};
 use decoded_char::DecodedChar;
 use locspan::Meta;
 
@@ -51,7 +51,7 @@ impl Parse for Fragment {
 			Some('[') => match array::StartFragment::parse_in(parser, context)? {
 				Meta(array::StartFragment::Empty, span) => Meta(Value::Array(Array::new()), span),
 				Meta(array::StartFragment::NonEmpty, span) => {
-					return Ok(Meta(Self::BeginArray, span))
+					return Ok(Meta(Self::BeginArray, span));
 				}
 			},
 			Some('{') => match object::StartFragment::parse_in(parser, context)? {
@@ -59,7 +59,7 @@ impl Parse for Fragment {
 					Meta(Value::Object(Object::new()), span)
 				}
 				Meta(object::StartFragment::NonEmpty(key), span) => {
-					return Ok(Meta(Self::BeginObject(key), span))
+					return Ok(Meta(Self::BeginObject(key), span));
 				}
 			},
 			unexpected => return Err(Error::unexpected(parser.position, unexpected)),
@@ -74,12 +74,12 @@ impl Parse for Value {
 		Self::parse_str_with(content, super::Options::default())
 	}
 
-	fn parse_str_with(content: &str, options: super::Options) -> Result<(Self, crate::CodeMap), Error> {
-		let (value, rec) = super::slice::parse_value_str_with(
-			content,
-			options,
-			super::slice::Recording::new(),
-		)?;
+	fn parse_str_with(
+		content: &str,
+		options: super::Options,
+	) -> Result<(Self, crate::CodeMap), Error> {
+		let (value, rec) =
+			super::slice::parse_value_str_with(content, options, super::slice::Recording::new())?;
 		Ok((value, rec.code_map))
 	}
 
@@ -87,12 +87,12 @@ impl Parse for Value {
 		Self::parse_slice_with(content, super::Options::default())
 	}
 
-	fn parse_slice_with(content: &[u8], options: super::Options) -> Result<(Self, crate::CodeMap), Error> {
-		let (value, rec) = super::slice::parse_value_slice_with(
-			content,
-			options,
-			super::slice::Recording::new(),
-		)?;
+	fn parse_slice_with(
+		content: &[u8],
+		options: super::Options,
+	) -> Result<(Self, crate::CodeMap), Error> {
+		let (value, rec) =
+			super::slice::parse_value_slice_with(content, options, super::slice::Recording::new())?;
 		Ok((value, rec.code_map))
 	}
 

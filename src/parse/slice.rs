@@ -14,7 +14,7 @@
 //! that monomorphises away.
 
 use crate::{
-	object::Key, parse::Options, Array, CodeMap, NumberBuf, Object, String as JsonString, Value,
+	Array, CodeMap, NumberBuf, Object, String as JsonString, Value, object::Key, parse::Options,
 };
 use locspan::Span;
 
@@ -69,9 +69,18 @@ impl Mapper for NoOp {
 }
 
 enum StackItem {
-	Array { array: Array, frag: usize },
-	ArrayItem { array: Array, frag: usize },
-	Object { object: Object, frag: usize },
+	Array {
+		array: Array,
+		frag: usize,
+	},
+	ArrayItem {
+		array: Array,
+		frag: usize,
+	},
+	Object {
+		object: Object,
+		frag: usize,
+	},
 	ObjectEntry {
 		object: Object,
 		frag: usize,
@@ -82,8 +91,14 @@ enum StackItem {
 
 enum Begin {
 	Value(Value),
-	ArrayItem { frag: usize },
-	ObjectEntry { frag: usize, key: Key, entry_frag: usize },
+	ArrayItem {
+		frag: usize,
+	},
+	ObjectEntry {
+		frag: usize,
+		key: Key,
+		entry_frag: usize,
+	},
 }
 
 pub(crate) struct SliceParser<'a, M: Mapper> {
@@ -284,8 +299,8 @@ impl<'a, M: Mapper> SliceParser<'a, M> {
 								Some((p_high, high)) => {
 									if (0xdc00..=0xdfff).contains(&codepoint) {
 										let low = codepoint;
-										let cp = ((high - 0xd800) << 10 | (low - 0xdc00))
-											+ 0x010000;
+										let cp =
+											((high - 0xd800) << 10 | (low - 0xdc00)) + 0x010000;
 										match char::from_u32(cp) {
 											Some(c) => Some(c),
 											None => {
@@ -420,11 +435,7 @@ impl<'a, M: Mapper> SliceParser<'a, M> {
 		Ok(unsafe { NumberBuf::new_unchecked(buf) })
 	}
 
-	fn parse_number_slow(
-		&mut self,
-		ctx: super::Context,
-		start: usize,
-	) -> Result<NumberBuf, Error> {
+	fn parse_number_slow(&mut self, ctx: super::Context, start: usize) -> Result<NumberBuf, Error> {
 		let bytes = self.input;
 		let mut i = start;
 

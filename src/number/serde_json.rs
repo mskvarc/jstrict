@@ -30,4 +30,3 @@ impl<'n> From<&'n Number> for serde_json::Number {
 		}
 	}
 }
-

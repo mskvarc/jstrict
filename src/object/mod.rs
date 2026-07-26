@@ -741,7 +741,10 @@ impl Object {
 	/// Otherwise, `None` is returned.
 	pub fn insert(&mut self, key: Key, value: Value) -> Option<RemovedByInsertion<'_>> {
 		let new_index = self.entries.len();
-		match self.indexes.lookup_or_insert(&self.entries, new_index, &key) {
+		match self
+			.indexes
+			.lookup_or_insert(&self.entries, new_index, &key)
+		{
 			Some(index) => {
 				let mut entry = Entry::new(key, value);
 				core::mem::swap(&mut entry, &mut self.entries[index]);
@@ -1033,7 +1036,6 @@ pub enum Indexes<'a> {
 	#[default]
 	None,
 }
-
 
 impl<'a> Iterator for Indexes<'a> {
 	type Item = usize;

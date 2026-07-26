@@ -1,9 +1,9 @@
-use serde::{ser::Impossible, Serialize};
+use serde::{Serialize, ser::Impossible};
 use smallstr::SmallString;
 use std::fmt;
 
 use super::NUMBER_TOKEN;
-use crate::{object::Key, Array, NumberBuf, Object, Value};
+use crate::{Array, NumberBuf, Object, Value, object::Key};
 
 impl Serialize for Value {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -142,14 +142,12 @@ impl serde::Serializer for Serializer {
 
 	#[inline(always)]
 	fn serialize_f32(self, v: f32) -> Result<Self::Ok, Self::Error> {
-		Ok(NumberBuf::try_from(v)
-			.map_or(Value::Null, Value::Number))
+		Ok(NumberBuf::try_from(v).map_or(Value::Null, Value::Number))
 	}
 
 	#[inline(always)]
 	fn serialize_f64(self, v: f64) -> Result<Self::Ok, Self::Error> {
-		Ok(NumberBuf::try_from(v)
-			.map_or(Value::Null, Value::Number))
+		Ok(NumberBuf::try_from(v).map_or(Value::Null, Value::Number))
 	}
 
 	#[inline(always)]

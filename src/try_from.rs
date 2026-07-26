@@ -1,7 +1,7 @@
 use core::fmt;
 use std::{collections::BTreeMap, marker::PhantomData, str::FromStr};
 
-use crate::{array::JsonArray, code_map::Mapped, CodeMap, Kind, KindSet, Object, Value};
+use crate::{CodeMap, Kind, KindSet, Object, Value, array::JsonArray, code_map::Mapped};
 
 /// Conversion from JSON syntax, with code mapping info.
 ///

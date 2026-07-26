@@ -1,7 +1,6 @@
 use jstrict::{
-	json,
+	Object, Value, json,
 	object::{Entry, Key},
-	Object, Value,
 };
 
 #[test]

@@ -1,4 +1,4 @@
-use crate::{object::Entry, Object, Value};
+use crate::{Object, Value, object::Entry};
 
 impl Value {
 	/// Converts a [`serde_json::Value`] into a `Value`.

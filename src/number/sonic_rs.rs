@@ -29,8 +29,7 @@ impl<'n> From<&'n Number> for sonic_rs::Number {
 		} else if let Some(i) = n.as_i64() {
 			sonic_rs::Number::from(i)
 		} else {
-			sonic_rs::Number::from_f64(n.as_f64_lossy())
-				.expect("non-finite JSON number")
+			sonic_rs::Number::from_f64(n.as_f64_lossy()).expect("non-finite JSON number")
 		}
 	}
 }

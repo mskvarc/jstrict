@@ -253,7 +253,7 @@ impl Number {
 						Sign::Positive
 					} else {
 						Sign::Negative
-					}
+					};
 				}
 			}
 		}
@@ -408,11 +408,7 @@ impl Number {
 	pub fn as_f64_lossless(&self) -> Option<f64> {
 		let f = self.as_f64_lossy();
 		let n: NumberBuf = f.try_into().unwrap();
-		if n.as_number() == self {
-			Some(f)
-		} else {
-			None
-		}
+		if n.as_number() == self { Some(f) } else { None }
 	}
 
 	/// Returns the canonical representation of this number according to

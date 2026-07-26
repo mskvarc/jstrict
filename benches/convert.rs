@@ -1,6 +1,6 @@
-use criterion::{criterion_group, criterion_main, Criterion};
-use std::hint::black_box;
+use criterion::{Criterion, criterion_group, criterion_main};
 use jstrict::{Parse, Value};
+use std::hint::black_box;
 
 mod common;
 
@@ -11,10 +11,7 @@ fn pair(json: &str) -> (Value, serde_json::Value) {
 }
 
 fn bench_convert(c: &mut Criterion) {
-	for (name, source) in [
-		("medium", common::medium()),
-		("large", common::large()),
-	] {
+	for (name, source) in [("medium", common::medium()), ("large", common::large())] {
 		let (_, sj) = pair(&source);
 		let jsn_again = Value::parse_str(&source).unwrap().0;
 

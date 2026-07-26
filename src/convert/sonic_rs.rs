@@ -1,4 +1,4 @@
-use crate::{object::Entry, Object, Value};
+use crate::{Object, Value, object::Entry};
 use sonic_rs::value::ValueRef;
 
 impl Value {
@@ -118,9 +118,6 @@ mod tests {
 		assert_eq!(back.get("f").unwrap().as_f64(), Some(1.5));
 		assert_eq!(back.get("s").unwrap().as_str(), Some("hi"));
 		assert_eq!(back.get("a").unwrap().as_array().unwrap().len(), 3);
-		assert_eq!(
-			back.get("o").unwrap().get("k").unwrap().as_str(),
-			Some("v")
-		);
+		assert_eq!(back.get("o").unwrap().get("k").unwrap().as_str(), Some("v"));
 	}
 }

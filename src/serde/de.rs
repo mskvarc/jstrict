@@ -1,15 +1,16 @@
 use serde::{
+	Deserialize,
 	de::{
 		DeserializeSeed, EnumAccess, Expected, IntoDeserializer, MapAccess, SeqAccess, Unexpected,
 		VariantAccess, Visitor,
 	},
-	forward_to_deserialize_any, Deserialize,
+	forward_to_deserialize_any,
 };
 use std::fmt;
 
 use crate::{
-	object::{Entry, Key},
 	Array, NumberBuf, Object, Value,
+	object::{Entry, Key},
 };
 
 use super::NUMBER_TOKEN;

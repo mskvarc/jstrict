@@ -1,5 +1,5 @@
 //! JSON arrays.
-use crate::{code_map::Mapped, CodeMap, Value};
+use crate::{CodeMap, Value, code_map::Mapped};
 
 /// JSON array.
 ///

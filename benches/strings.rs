@@ -1,6 +1,6 @@
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
+use jstrict::{Parse, Value, parse::Options};
 use std::hint::black_box;
-use jstrict::{parse::Options, Parse, Value};
 
 mod common;
 
@@ -35,10 +35,7 @@ fn cases() -> Vec<(&'static str, String)> {
 		("bmp_escape_heavy", quoted(&bmp_escapes)),
 		("surrogate_pair_heavy", common::surrogate_heavy(1_000)),
 		("pathological_100kb", quoted(&pathological)),
-		(
-			"long_ascii_100kb",
-			common::long_ascii_string(100_000),
-		),
+		("long_ascii_100kb", common::long_ascii_string(100_000)),
 	]
 }
 

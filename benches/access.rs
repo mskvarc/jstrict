@@ -1,6 +1,6 @@
-use criterion::{criterion_group, criterion_main, Criterion};
-use std::hint::black_box;
+use criterion::{Criterion, criterion_group, criterion_main};
 use jstrict::{Parse, Value};
+use std::hint::black_box;
 
 mod common;
 
@@ -83,7 +83,9 @@ fn bench_get_fragment(c: &mut Criterion) {
 	let (medium, _) = common::parsed(&common::medium());
 	let total = medium.volume();
 	let mut rng = common::Rng::new(common::SEED);
-	let indices: Vec<usize> = (0..1_000).map(|_| rng.range(total as u64) as usize).collect();
+	let indices: Vec<usize> = (0..1_000)
+		.map(|_| rng.range(total as u64) as usize)
+		.collect();
 
 	c.bench_function("access/get_fragment/medium", |b| {
 		b.iter(|| {
@@ -98,5 +100,10 @@ fn bench_get_fragment(c: &mut Criterion) {
 	});
 }
 
-criterion_group!(benches, bench_traverse, bench_object_lookup, bench_get_fragment);
+criterion_group!(
+	benches,
+	bench_traverse,
+	bench_object_lookup,
+	bench_get_fragment
+);
 criterion_main!(benches);

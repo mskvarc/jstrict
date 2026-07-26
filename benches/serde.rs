@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
-use criterion::{criterion_group, criterion_main, Criterion};
-use std::hint::black_box;
+use criterion::{Criterion, criterion_group, criterion_main};
 use jstrict::{Object, Parse, Value};
 use serde::{Deserialize, Serialize};
+use std::hint::black_box;
 
 mod common;
 
@@ -45,9 +45,7 @@ fn build_users(n: usize) -> Vec<User> {
 			} else {
 				None
 			},
-			tags: (0..(rng.range(5)))
-				.map(|j| format!("tag_{}", j))
-				.collect(),
+			tags: (0..(rng.range(5))).map(|j| format!("tag_{}", j)).collect(),
 			scores: (0..(rng.range(8)))
 				.map(|_| rng.range(10_000) as f64 / 100.0)
 				.collect(),

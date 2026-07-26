@@ -1,6 +1,6 @@
-use criterion::{criterion_group, criterion_main, Criterion, Throughput};
-use std::hint::black_box;
+use criterion::{Criterion, Throughput, criterion_group, criterion_main};
 use jstrict::{Parse, Print, Value};
+use std::hint::black_box;
 
 mod common;
 
@@ -80,19 +80,43 @@ fn bench_serde_json_modify(c: &mut Criterion) {
 	});
 }
 
-#[cfg(all(not(feature = "canonicalize"), not(feature = "serde"), not(feature = "serde_json")))]
+#[cfg(all(
+	not(feature = "canonicalize"),
+	not(feature = "serde"),
+	not(feature = "serde_json")
+))]
 criterion_group!(benches, bench_parse_traverse_print);
 
-#[cfg(all(feature = "canonicalize", not(feature = "serde"), not(feature = "serde_json")))]
-criterion_group!(benches, bench_parse_traverse_print, bench_parse_canonicalize_print);
+#[cfg(all(
+	feature = "canonicalize",
+	not(feature = "serde"),
+	not(feature = "serde_json")
+))]
+criterion_group!(
+	benches,
+	bench_parse_traverse_print,
+	bench_parse_canonicalize_print
+);
 
-#[cfg(all(not(feature = "canonicalize"), feature = "serde", not(feature = "serde_json")))]
+#[cfg(all(
+	not(feature = "canonicalize"),
+	feature = "serde",
+	not(feature = "serde_json")
+))]
 criterion_group!(benches, bench_parse_traverse_print, bench_serde_round_trip);
 
-#[cfg(all(not(feature = "canonicalize"), not(feature = "serde"), feature = "serde_json"))]
+#[cfg(all(
+	not(feature = "canonicalize"),
+	not(feature = "serde"),
+	feature = "serde_json"
+))]
 criterion_group!(benches, bench_parse_traverse_print, bench_serde_json_modify);
 
-#[cfg(all(feature = "canonicalize", feature = "serde", not(feature = "serde_json")))]
+#[cfg(all(
+	feature = "canonicalize",
+	feature = "serde",
+	not(feature = "serde_json")
+))]
 criterion_group!(
 	benches,
 	bench_parse_traverse_print,
@@ -100,7 +124,11 @@ criterion_group!(
 	bench_serde_round_trip
 );
 
-#[cfg(all(feature = "canonicalize", not(feature = "serde"), feature = "serde_json"))]
+#[cfg(all(
+	feature = "canonicalize",
+	not(feature = "serde"),
+	feature = "serde_json"
+))]
 criterion_group!(
 	benches,
 	bench_parse_traverse_print,
@@ -108,7 +136,11 @@ criterion_group!(
 	bench_serde_json_modify
 );
 
-#[cfg(all(not(feature = "canonicalize"), feature = "serde", feature = "serde_json"))]
+#[cfg(all(
+	not(feature = "canonicalize"),
+	feature = "serde",
+	feature = "serde_json"
+))]
 criterion_group!(
 	benches,
 	bench_parse_traverse_print,

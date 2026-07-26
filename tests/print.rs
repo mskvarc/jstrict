@@ -1,4 +1,4 @@
-use jstrict::{json, Parse, Print};
+use jstrict::{Parse, Print, json};
 
 #[test]
 fn print_01() {

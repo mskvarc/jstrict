@@ -1,6 +1,6 @@
-use criterion::{criterion_group, criterion_main, Criterion};
-use std::hint::black_box;
+use criterion::{Criterion, criterion_group, criterion_main};
 use jstrict::{Parse, Value};
+use std::hint::black_box;
 
 mod common;
 
@@ -12,31 +12,25 @@ fn cases() -> Vec<(&'static str, String)> {
 		("f64_short", "3.14".into()),
 		("f64_long", "3.141592653589793238462643383279".into()),
 		("scientific", "1.23e-45".into()),
-		(
-			"arbitrary_int_200",
-			{
-				let mut s = String::with_capacity(200);
-				let mut rng = common::Rng::new(common::SEED);
-				s.push('1');
-				for _ in 0..199 {
-					s.push((b'0' + rng.range(10) as u8) as char);
-				}
-				s
-			},
-		),
-		(
-			"arbitrary_decimal_200",
-			{
-				let mut s = String::with_capacity(202);
-				let mut rng = common::Rng::new(common::SEED);
-				s.push('1');
-				s.push('.');
-				for _ in 0..200 {
-					s.push((b'0' + rng.range(10) as u8) as char);
-				}
-				s
-			},
-		),
+		("arbitrary_int_200", {
+			let mut s = String::with_capacity(200);
+			let mut rng = common::Rng::new(common::SEED);
+			s.push('1');
+			for _ in 0..199 {
+				s.push((b'0' + rng.range(10) as u8) as char);
+			}
+			s
+		}),
+		("arbitrary_decimal_200", {
+			let mut s = String::with_capacity(202);
+			let mut rng = common::Rng::new(common::SEED);
+			s.push('1');
+			s.push('.');
+			for _ in 0..200 {
+				s.push((b'0' + rng.range(10) as u8) as char);
+			}
+			s
+		}),
 		("worst_case_1kb", common::huge_number(1024)),
 	]
 }

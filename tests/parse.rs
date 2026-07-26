@@ -1,4 +1,4 @@
-use jstrict::{parse::Options, Parse, Value};
+use jstrict::{Parse, Value, parse::Options};
 use std::fmt::Debug;
 use std::fs;
 use std::path::Path;

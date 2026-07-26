@@ -1,9 +1,9 @@
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use std::hint::black_box;
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use jstrict::{
-	object::{Entry, Key},
 	Object, Parse, Value,
+	object::{Entry, Key},
 };
+use std::hint::black_box;
 
 mod common;
 

@@ -1,5 +1,5 @@
 use crate::Value;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 
 mod de;
 mod ser;

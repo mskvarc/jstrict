@@ -1,6 +1,6 @@
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
+use jstrict::{Value, json};
 use std::hint::black_box;
-use jstrict::{json, Value};
 
 fn bench_macros(c: &mut Criterion) {
 	c.bench_function("macros/simple", |b| {
@@ -36,8 +36,10 @@ fn bench_macros(c: &mut Criterion) {
 		let name = "alice";
 		let scores = [1.0_f64, 2.0, 3.0];
 		b.iter(|| {
-			let scores_v: Vec<Value> =
-				scores.iter().map(|x| Value::try_from(*x).unwrap()).collect();
+			let scores_v: Vec<Value> = scores
+				.iter()
+				.map(|x| Value::try_from(*x).unwrap())
+				.collect();
 			black_box(json!({
 				"id": Value::from(id),
 				"name": Value::from(name),
