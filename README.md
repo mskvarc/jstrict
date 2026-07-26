@@ -49,7 +49,7 @@ Fork of [`json-syntax`](https://crates.io/crates/json-syntax) by [Timothée Haud
 - [`json-number`](https://crates.io/crates/json-number) folded in as the `number` module; number formatting and parsing go through [`lexical`](https://crates.io/crates/lexical).
 - Conversion from/to `sonic_rs::Value`, alongside the existing `serde_json::Value` conversion.
 - Criterion bench suite under `benches/` — parse, print, access, object, serde, convert, canonicalize, numbers, strings, macros, end-to-end.
-- Rust 2024 edition, MSRV 1.85.1.
+- Rust 2024 edition, MSRV 1.96.
 - Renamed crate: `json-syntax` → `jstrict`.
 
 Credit and history preserved — see [Attribution](#attribution).
@@ -130,7 +130,7 @@ cargo run --features sonic-rs --example sonic_rs
 
 ## MSRV
 
-Rust 1.85.1 (edition 2024).
+Rust 1.96 (edition 2024).
 
 ## Attribution
 
