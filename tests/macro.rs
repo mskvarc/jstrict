@@ -9,7 +9,7 @@ fn macro_01() {
 		null
 	};
 
-	assert_eq!(value, Value::Null)
+	assert_eq!(value, Value::Null);
 }
 
 #[test]
@@ -18,7 +18,7 @@ fn macro_02() {
 		true
 	};
 
-	assert_eq!(value, Value::Boolean(true))
+	assert_eq!(value, Value::Boolean(true));
 }
 
 #[test]
@@ -27,7 +27,7 @@ fn macro_03() {
 		false
 	};
 
-	assert_eq!(value, Value::Boolean(false))
+	assert_eq!(value, Value::Boolean(false));
 }
 
 #[test]
@@ -36,7 +36,7 @@ fn macro_04() {
 		[]
 	};
 
-	assert_eq!(value, Value::Array(vec![]))
+	assert_eq!(value, Value::Array(vec![]));
 }
 
 #[test]
@@ -45,7 +45,7 @@ fn macro_05() {
 		{}
 	};
 
-	assert_eq!(value, Value::Object(Object::default()))
+	assert_eq!(value, Value::Object(Object::default()));
 }
 
 #[test]
@@ -54,7 +54,7 @@ fn macro_06() {
 		[ null ]
 	};
 
-	assert_eq!(value, Value::Array(vec![Value::Null]))
+	assert_eq!(value, Value::Array(vec![Value::Null]));
 }
 
 #[test]
@@ -66,7 +66,7 @@ fn macro_07() {
 	assert_eq!(
 		value,
 		Value::Object(vec![Entry::new("foo".into(), Value::Null)].into())
-	)
+	);
 }
 
 #[test]
@@ -76,7 +76,7 @@ fn macro_08() {
 		[ item ]
 	};
 
-	assert_eq!(value, Value::Array(vec![Value::Null]))
+	assert_eq!(value, Value::Array(vec![Value::Null]));
 }
 
 #[test]
@@ -92,7 +92,7 @@ fn macro_09() {
 			Value::Boolean(true),
 			Value::Boolean(false)
 		])
-	)
+	);
 }
 
 #[test]
@@ -107,7 +107,7 @@ fn macro_10() {
 			Entry::new("a".into(), Value::Boolean(true)),
 			Entry::new("b".into(), Value::Boolean(false))
 		]))
-	)
+	);
 }
 
 #[test]
@@ -125,7 +125,7 @@ fn macro_11() {
 			Entry::new("a".into(), Value::Boolean(true)),
 			Entry::new("b".into(), Value::Boolean(false))
 		]))
-	)
+	);
 }
 
 #[test]
@@ -144,7 +144,7 @@ fn macro_12() {
 			Entry::new("b".into(), Value::Object(Object::default())),
 			Entry::new("c".into(), Value::Boolean(false))
 		]))
-	)
+	);
 }
 
 #[test]
@@ -163,7 +163,7 @@ fn macro_13() {
 			Entry::new("b".into(), Value::Object(Object::default())),
 			Entry::new("c".into(), Value::Boolean(false))
 		]))
-	)
+	);
 }
 
 #[test]
@@ -178,5 +178,5 @@ fn macro_14() {
 			Entry::new("a".into(), Value::Number(0.1f32.try_into().unwrap())),
 			Entry::new("b".into(), Value::Number(1.1e10f32.try_into().unwrap()))
 		]))
-	)
+	);
 }

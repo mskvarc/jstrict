@@ -1,7 +1,7 @@
 //! SWAR/memchr byte scanners shared by the slice parser and printer.
 //!
 //! All routines walk u64 chunks via SWAR (SIMD-Within-A-Register) tricks so
-//! the compiler can autovectorise further on x86_64 / aarch64 release builds.
+//! the compiler can autovectorise further on `x86_64` / aarch64 release builds.
 
 const LO_BITS: u64 = 0x0101_0101_0101_0101;
 const HI_BITS: u64 = 0x8080_8080_8080_8080;
@@ -24,7 +24,10 @@ const fn mask_eq(v: u64, c: u8) -> u64 {
 pub fn find_lt_0x20(s: &[u8]) -> Option<usize> {
 	let mut i = 0;
 	while i + 8 <= s.len() {
-		let v = u64::from_le_bytes(s[i..i + 8].try_into().unwrap());
+		let Some(chunk) = s[i..].first_chunk::<8>() else {
+			break;
+		};
+		let v = u64::from_le_bytes(*chunk);
 		let m = mask_lt_0x20(v);
 		if m != 0 {
 			return Some(i + (m.trailing_zeros() / 8) as usize);
@@ -45,7 +48,10 @@ pub fn find_lt_0x20(s: &[u8]) -> Option<usize> {
 pub fn find_escape(s: &[u8]) -> Option<usize> {
 	let mut i = 0;
 	while i + 8 <= s.len() {
-		let v = u64::from_le_bytes(s[i..i + 8].try_into().unwrap());
+		let Some(chunk) = s[i..].first_chunk::<8>() else {
+			break;
+		};
+		let v = u64::from_le_bytes(*chunk);
 		let m = mask_lt_0x20(v) | mask_eq(v, b'"') | mask_eq(v, b'\\');
 		if m != 0 {
 			return Some(i + (m.trailing_zeros() / 8) as usize);

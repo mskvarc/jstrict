@@ -14,7 +14,9 @@ fn quoted(content: &str) -> String {
 
 fn cases() -> Vec<(&'static str, String)> {
 	let ascii_inline: String = "abcdefghijkl".into();
-	let ascii_spill: String = (0..200).map(|i| (b'a' + (i % 26) as u8) as char).collect();
+	let ascii_spill: String = (0..200)
+		.map(|i| (b'a' + u8::try_from(i % 26).unwrap_or(0)) as char)
+		.collect();
 	let escapes_quote: String = "\\\"".repeat(256);
 	let backslashes: String = "\\\\".repeat(256);
 	let bmp_escapes: String = "\\u00ff".repeat(256);
@@ -22,7 +24,7 @@ fn cases() -> Vec<(&'static str, String)> {
 	for i in 0..6_250 {
 		// 16 chars between escapes; total ~100KB.
 		for _ in 0..16 {
-			pathological.push((b'a' + (i % 26) as u8) as char);
+			pathological.push((b'a' + u8::try_from(i % 26).unwrap_or(0)) as char);
 		}
 		pathological.push_str("\\n");
 	}
@@ -41,15 +43,15 @@ fn cases() -> Vec<(&'static str, String)> {
 
 fn bench_strings(c: &mut Criterion) {
 	for (name, source) in cases() {
-		c.bench_function(&format!("strings/{}", name), |b| {
-			b.iter(|| Value::parse_str(black_box(source.as_str())).unwrap());
+		c.bench_function(&format!("strings/{name}"), |b| {
+			b.iter(|| Value::parse_str(black_box(source.as_str())).ok());
 		});
 	}
 
 	let surrogates = common::surrogate_heavy(1_000);
 	let flex = Options::flexible();
 	c.bench_function("strings/surrogate_pair_flexible", |b| {
-		b.iter(|| Value::parse_str_with(black_box(surrogates.as_str()), flex).unwrap());
+		b.iter(|| Value::parse_str_with(black_box(surrogates.as_str()), flex).ok());
 	});
 }
 

@@ -11,9 +11,6 @@ impl Parse for NumberBuf {
 	where
 		C: Iterator<Item = Result<DecodedChar, E>>,
 	{
-		let i = parser.begin_fragment();
-		let mut buffer: SmallVec<[u8; NUMBER_CAPACITY]> = SmallVec::new();
-
 		enum State {
 			Init,
 			FirstDigit,
@@ -25,6 +22,9 @@ impl Parse for NumberBuf {
 			ExponentFirst,
 			ExponentRest,
 		}
+
+		let i = parser.begin_fragment();
+		let mut buffer: SmallVec<[u8; NUMBER_CAPACITY]> = SmallVec::new();
 
 		let mut state = State::Init;
 
@@ -47,9 +47,8 @@ impl Parse for NumberBuf {
 					_ => {
 						if context.follows(c) {
 							break;
-						} else {
-							return Err(Error::unexpected(parser.position, Some(c)));
 						}
+						return Err(Error::unexpected(parser.position, Some(c)));
 					}
 				},
 				State::NonZero => match c {
@@ -59,9 +58,8 @@ impl Parse for NumberBuf {
 					_ => {
 						if context.follows(c) {
 							break;
-						} else {
-							return Err(Error::unexpected(parser.position, Some(c)));
 						}
+						return Err(Error::unexpected(parser.position, Some(c)));
 					}
 				},
 				State::FractionalFirst => match c {
@@ -74,9 +72,8 @@ impl Parse for NumberBuf {
 					_ => {
 						if context.follows(c) {
 							break;
-						} else {
-							return Err(Error::unexpected(parser.position, Some(c)));
 						}
+						return Err(Error::unexpected(parser.position, Some(c)));
 					}
 				},
 				State::ExponentSign => match c {
@@ -88,16 +85,16 @@ impl Parse for NumberBuf {
 					'0'..='9' => state = State::ExponentRest,
 					_ => return Err(Error::unexpected(parser.position, Some(c))),
 				},
-				State::ExponentRest => match c {
-					'0'..='9' => state = State::ExponentRest,
-					_ => {
+				State::ExponentRest => {
+					if let '0'..='9' = c {
+						state = State::ExponentRest;
+					} else {
 						if context.follows(c) {
 							break;
-						} else {
-							return Err(Error::unexpected(parser.position, Some(c)));
 						}
+						return Err(Error::unexpected(parser.position, Some(c)));
 					}
-				},
+				}
 			}
 
 			// u8 conversion is safe since a number is composed of ASCII chars.

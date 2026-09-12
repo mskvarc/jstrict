@@ -14,12 +14,13 @@ impl Value {
 	/// });
 	///
 	/// // We convert the `sonic_rs` value into a `jstrict` value.
-	/// let b = jstrict::Value::from_sonic_rs(a);
+	/// let b = jstrict::Value::from_sonic_rs(&a);
 	///
 	/// // We convert it back into a `sonic_rs` value.
 	/// let _ = jstrict::Value::into_sonic_rs(b);
 	/// ```
-	pub fn from_sonic_rs(value: sonic_rs::Value) -> Self {
+	#[must_use]
+	pub fn from_sonic_rs(value: &sonic_rs::Value) -> Self {
 		match value.as_ref() {
 			ValueRef::Null => Self::Null,
 			ValueRef::Bool(b) => Self::Boolean(b),
@@ -27,15 +28,15 @@ impl Value {
 			ValueRef::String(s) => Self::String(s.into()),
 			ValueRef::Array(a) => {
 				let mut out = Vec::with_capacity(a.len());
-				for v in a.iter() {
-					out.push(Self::from_sonic_rs(v.clone()));
+				for v in a {
+					out.push(Self::from_sonic_rs(v));
 				}
 				Self::Array(out)
 			}
 			ValueRef::Object(o) => {
 				let mut out = Object::with_capacity(o.len());
-				for (k, v) in o.iter() {
-					out.push_entry(Entry::new(k.into(), Self::from_sonic_rs(v.clone())));
+				for (k, v) in o {
+					out.push_entry(Entry::new(k.into(), Self::from_sonic_rs(v)));
 				}
 				Self::Object(out)
 			}
@@ -54,11 +55,12 @@ impl Value {
 	/// });
 	///
 	/// // We convert the `sonic_rs` value into a `jstrict` value.
-	/// let b = jstrict::Value::from_sonic_rs(a);
+	/// let b = jstrict::Value::from_sonic_rs(&a);
 	///
 	/// // We convert it back into a `sonic_rs` value.
 	/// let _ = jstrict::Value::into_sonic_rs(b);
 	/// ```
+	#[must_use]
 	pub fn into_sonic_rs(self) -> sonic_rs::Value {
 		match self {
 			Self::Null => sonic_rs::Value::default(),
@@ -86,7 +88,7 @@ impl Value {
 impl From<sonic_rs::Value> for Value {
 	#[inline(always)]
 	fn from(value: sonic_rs::Value) -> Self {
-		Self::from_sonic_rs(value)
+		Self::from_sonic_rs(&value)
 	}
 }
 
@@ -108,7 +110,7 @@ mod tests {
 		)
 		.unwrap();
 
-		let mid = Value::from_sonic_rs(src);
+		let mid = Value::from_sonic_rs(&src);
 		let back = mid.into_sonic_rs();
 
 		assert!(back.get("n").unwrap().is_null());

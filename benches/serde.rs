@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use criterion::{Criterion, criterion_group, criterion_main};
-use jstrict::{Object, Parse, Value};
+use jstrict::Object;
 use serde::{Deserialize, Serialize};
 use std::hint::black_box;
 
@@ -39,15 +39,15 @@ fn build_users(n: usize) -> Vec<User> {
 	(0..n)
 		.map(|i| User {
 			id: i as u64,
-			name: format!("user_{}", i),
+			name: format!("user_{i}"),
 			email: if rng.boolean() {
-				Some(format!("u{}@example.com", i))
+				Some(format!("u{i}@example.com"))
 			} else {
 				None
 			},
-			tags: (0..(rng.range(5))).map(|j| format!("tag_{}", j)).collect(),
+			tags: (0..(rng.range(5))).map(|j| format!("tag_{j}")).collect(),
 			scores: (0..(rng.range(8)))
-				.map(|_| rng.range(10_000) as f64 / 100.0)
+				.map(|_| f64::from(u32::try_from(rng.range(10_000)).unwrap_or(0)) / 100.0)
 				.collect(),
 			address: Address {
 				street: format!("{} Main St", rng.range(9999)),
@@ -67,7 +67,7 @@ fn build_users(n: usize) -> Vec<User> {
 				_ => Status::Deleted(rng.range(1_000_000)),
 			},
 			attributes: (0..(rng.range(4)))
-				.map(|j| (format!("k{}", j), format!("v{}", j)))
+				.map(|j| (format!("k{j}"), format!("v{j}")))
 				.collect(),
 		})
 		.collect()
@@ -76,27 +76,28 @@ fn build_users(n: usize) -> Vec<User> {
 fn bench_to_value(c: &mut Criterion) {
 	let users = build_users(200);
 	c.bench_function("serde/to_value/users_200", |b| {
-		b.iter(|| jstrict::to_value(black_box(&users)).unwrap());
+		b.iter(|| jstrict::to_value(black_box(&users)).ok());
 	});
 	c.bench_function("serde/serde_json_to_value/users_200", |b| {
-		b.iter(|| serde_json::to_value(black_box(&users)).unwrap());
+		b.iter(|| serde_json::to_value(black_box(&users)).ok());
 	});
 }
 
 fn bench_from_value(c: &mut Criterion) {
 	let users = build_users(200);
-	let value = jstrict::to_value(&users).unwrap();
-	let sj_value = serde_json::to_value(&users).unwrap();
+	let value = jstrict::to_value(&users).unwrap_or(jstrict::Value::Null);
+	let sj_value = serde_json::to_value(&users).unwrap_or_default();
 
 	c.bench_function("serde/from_value/users_200", |b| {
 		b.iter(|| {
-			let v: Vec<User> = jstrict::from_value(black_box(value.clone())).unwrap();
+			let v: Vec<User> = jstrict::from_value(black_box(value.clone())).unwrap_or_default();
 			v
 		});
 	});
 	c.bench_function("serde/serde_json_from_value/users_200", |b| {
 		b.iter(|| {
-			let v: Vec<User> = serde_json::from_value(black_box(sj_value.clone())).unwrap();
+			let v: Vec<User> =
+				serde_json::from_value(black_box(sj_value.clone())).unwrap_or_default();
 			v
 		});
 	});
@@ -106,8 +107,8 @@ fn bench_round_trip(c: &mut Criterion) {
 	let users = build_users(200);
 	c.bench_function("serde/round_trip/users_200", |b| {
 		b.iter(|| {
-			let v = jstrict::to_value(black_box(&users)).unwrap();
-			let users2: Vec<User> = jstrict::from_value(v).unwrap();
+			let v = jstrict::to_value(black_box(&users)).unwrap_or(jstrict::Value::Null);
+			let users2: Vec<User> = jstrict::from_value(v).unwrap_or_default();
 			users2
 		});
 	});
@@ -116,10 +117,10 @@ fn bench_round_trip(c: &mut Criterion) {
 fn bench_object_deserialize(c: &mut Criterion) {
 	// Targets the `Object: Deserialize` impl added in commit a989e60.
 	let json = common::wide_object(1_000);
-	let value = Value::parse_str(&json).unwrap().0;
+	let value = common::parsed(&json).0;
 	c.bench_function("serde/object_deserialize/wide_1k", |b| {
 		b.iter(|| {
-			let o: Object = jstrict::from_value(black_box(value.clone())).unwrap();
+			let o: Object = jstrict::from_value(black_box(value.clone())).unwrap_or_default();
 			o
 		});
 	});

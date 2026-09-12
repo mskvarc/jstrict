@@ -2,6 +2,7 @@
 //! using the `serde` crate. This will not allow you to attach metadata to each
 //! value fragment (the `M` type will be unit `()`).
 use jstrict::Print;
+use std::error::Error;
 
 #[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 struct MyType {
@@ -9,7 +10,7 @@ struct MyType {
 	bar: Vec<u32>,
 }
 
-fn main() {
+fn main() -> Result<(), Box<dyn Error>> {
 	// Instantiate our type.
 	let a = MyType {
 		foo: "Hello World!".to_string(),
@@ -17,14 +18,15 @@ fn main() {
 	};
 
 	// Serialize `a` into a JSON value.
-	let json = jstrict::to_value(&a).expect("serialization failed");
+	let json = jstrict::to_value(&a)?;
 
 	// Print the value.
 	println!("{}", json.pretty_print());
 
 	// Deserialize JSON back into `MyType`.
-	let b: MyType = jstrict::from_value(json).expect("deserialization failed");
+	let b: MyType = jstrict::from_value(json)?;
 
 	// The round-trip should not change the actual data.
-	assert_eq!(a, b)
+	assert_eq!(a, b);
+	Ok(())
 }

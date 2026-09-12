@@ -38,6 +38,75 @@ where
 	}
 }
 
+fn decode_unicode_escape<C, E>(
+	parser: &mut Parser<C, E>,
+	result: &mut String,
+	high_surrogate: &mut Option<(usize, u32)>,
+	p: usize,
+) -> Result<Option<char>, Error<E>>
+where
+	C: Iterator<Item = Result<DecodedChar, E>>,
+{
+	let codepoint = parse_hex4(parser)?;
+	if let Some((p_high, high)) = high_surrogate.take() {
+		if (0xdc00..=0xdfff).contains(&codepoint) {
+			let low = codepoint;
+			let codepoint = ((high - 0xd800) << 10 | (low - 0xdc00)) + 0x01_0000;
+			match char::from_u32(codepoint) {
+				Some(c) => Ok(Some(c)),
+				None => {
+					if parser.options.accept_invalid_codepoints {
+						Ok(Some('\u{fffd}'))
+					} else {
+						Err(Error::InvalidUnicodeCodePoint(
+							Span::new(p_high, parser.position),
+							codepoint,
+						))
+					}
+				}
+			}
+		} else if parser.options.accept_truncated_surrogate_pair {
+			result.push('\u{fffd}');
+			match char::from_u32(codepoint) {
+				Some(c) => Ok(Some(c)),
+				None => {
+					if parser.options.accept_invalid_codepoints {
+						Ok(Some('\u{fffd}'))
+					} else {
+						Err(Error::InvalidUnicodeCodePoint(
+							Span::new(p, parser.position),
+							codepoint,
+						))
+					}
+				}
+			}
+		} else {
+			Err(Error::InvalidLowSurrogate(
+				Span::new(p, parser.position),
+				high,
+				codepoint,
+			))
+		}
+	} else if (0xd800..=0xdbff).contains(&codepoint) {
+		*high_surrogate = Some((p, codepoint));
+		Ok(None)
+	} else {
+		match char::from_u32(codepoint) {
+			Some(c) => Ok(Some(c)),
+			None => {
+				if parser.options.accept_invalid_codepoints {
+					Ok(Some('\u{fffd}'))
+				} else {
+					Err(Error::InvalidUnicodeCodePoint(
+						Span::new(p, parser.position),
+						codepoint,
+					))
+				}
+			}
+		}
+	}
+}
+
 impl Parse for CompactString {
 	fn parse_in<C, E>(
 		parser: &mut Parser<C, E>,
@@ -63,7 +132,7 @@ impl Parse for CompactString {
 								} else {
 									break Err(Error::MissingLowSurrogate(
 										Span::new(p_high, p),
-										high as u16,
+										high,
 									));
 								}
 							}
@@ -79,71 +148,14 @@ impl Parse for CompactString {
 							(_, Some('f')) => '\u{000c}',
 							(_, Some('r')) => '\u{000d}',
 							(p, Some('u')) => {
-								let codepoint = parse_hex4(parser)?;
-
-								match high_surrogate.take() {
-									Some((p_high, high)) => {
-										if (0xdc00..=0xdfff).contains(&codepoint) {
-											let low = codepoint;
-											let codepoint =
-												((high - 0xd800) << 10 | (low - 0xdc00)) + 0x010000;
-											match char::from_u32(codepoint) {
-												Some(c) => c,
-												None => {
-													if parser.options.accept_invalid_codepoints {
-														'\u{fffd}'
-													} else {
-														break Err(Error::InvalidUnicodeCodePoint(
-															Span::new(p_high, parser.position),
-															codepoint,
-														));
-													}
-												}
-											}
-										} else if parser.options.accept_truncated_surrogate_pair {
-											result.push('\u{fffd}');
-
-											match char::from_u32(codepoint) {
-												Some(c) => c,
-												None => {
-													if parser.options.accept_invalid_codepoints {
-														'\u{fffd}'
-													} else {
-														break Err(Error::InvalidUnicodeCodePoint(
-															Span::new(p, parser.position),
-															codepoint,
-														));
-													}
-												}
-											}
-										} else {
-											break Err(Error::InvalidLowSurrogate(
-												Span::new(p, parser.position),
-												high as u16,
-												codepoint,
-											));
-										}
-									}
-									None => {
-										if (0xd800..=0xdbff).contains(&codepoint) {
-											high_surrogate = Some((p, codepoint));
-											continue;
-										} else {
-											match char::from_u32(codepoint) {
-												Some(c) => c,
-												None => {
-													if parser.options.accept_invalid_codepoints {
-														'\u{fffd}'
-													} else {
-														break Err(Error::InvalidUnicodeCodePoint(
-															Span::new(p, parser.position),
-															codepoint,
-														));
-													}
-												}
-											}
-										}
-									}
+								match decode_unicode_escape(
+									parser,
+									&mut result,
+									&mut high_surrogate,
+									p,
+								)? {
+									Some(c) => c,
+									None => continue,
 								}
 							}
 							(p, unexpected) => break Err(Error::unexpected(p, unexpected)),
@@ -158,7 +170,7 @@ impl Parse for CompactString {
 						} else {
 							break Err(Error::MissingLowSurrogate(
 								Span::new(p_high, parser.position),
-								high as u16,
+								high,
 							));
 						}
 					}

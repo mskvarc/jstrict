@@ -9,8 +9,8 @@ impl<B: Buffer> From<sonic_rs::Number> for NumberBuf<B> {
 		} else if let Some(i) = n.as_i64() {
 			NumberBuf::from(i)
 		} else {
-			let f = n.as_f64().expect("invalid `sonic_rs::Number`");
-			NumberBuf::try_from(f).expect("invalid `sonic_rs::Number`")
+			let f = n.as_f64().unwrap_or(0.0);
+			NumberBuf::try_from(f).unwrap_or_else(|_| NumberBuf::from(0u64))
 		}
 	}
 }
@@ -29,7 +29,8 @@ impl<'n> From<&'n Number> for sonic_rs::Number {
 		} else if let Some(i) = n.as_i64() {
 			sonic_rs::Number::from(i)
 		} else {
-			sonic_rs::Number::from_f64(n.as_f64_lossy()).expect("non-finite JSON number")
+			sonic_rs::Number::from_f64(n.as_f64_lossy())
+				.unwrap_or_else(|| sonic_rs::Number::from(0_i64))
 		}
 	}
 }

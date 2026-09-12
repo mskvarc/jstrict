@@ -1,5 +1,5 @@
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
-use jstrict::{Parse, Print, Value};
+use jstrict::Print;
 use std::hint::black_box;
 
 mod common;
@@ -14,9 +14,9 @@ fn fixtures() -> Vec<(&'static str, String)> {
 
 fn bench_canonicalize(c: &mut Criterion) {
 	for (name, source) in fixtures() {
-		let value = Value::parse_str(&source).unwrap().0;
+		let value = common::parsed(&source).0;
 
-		let mut group = c.benchmark_group(format!("canonicalize/{}", name));
+		let mut group = c.benchmark_group(format!("canonicalize/{name}"));
 		group.throughput(Throughput::Bytes(source.len() as u64));
 
 		group.bench_with_input(BenchmarkId::new("default", ""), &value, |b, v| {
@@ -51,7 +51,7 @@ fn bench_pipeline(c: &mut Criterion) {
 
 	c.bench_function("canonicalize/pipeline_medium", |b| {
 		b.iter(|| {
-			let mut v = Value::parse_str(black_box(source.as_str())).unwrap().0;
+			let mut v = common::parsed(black_box(source.as_str())).0;
 			v.canonicalize();
 			v.compact_print().to_string()
 		});

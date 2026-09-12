@@ -1,5 +1,6 @@
 //! JSON arrays.
 use crate::{CodeMap, Value, code_map::Mapped};
+use core::slice;
 
 /// JSON array.
 ///
@@ -39,18 +40,21 @@ impl JsonArray for Vec<Value> {
 ///
 /// Returned by [`JsonArray::iter_mapped`].
 pub struct IterMapped<'a, 'm> {
-	items: std::slice::Iter<'a, Value>,
+	items: slice::Iter<'a, Value>,
 	code_map: &'m CodeMap,
 	offset: usize,
 }
 
-impl<'a, 'm> Iterator for IterMapped<'a, 'm> {
+impl<'a> Iterator for IterMapped<'a, '_> {
 	type Item = Mapped<&'a Value>;
 
 	fn next(&mut self) -> Option<Self::Item> {
 		self.items.next().map(|item| {
 			let offset = self.offset;
-			self.offset += self.code_map.get(self.offset).unwrap().volume;
+			self.offset += self
+				.code_map
+				.get(self.offset)
+				.map_or(0, |entry| entry.volume);
 			Mapped::new(offset, item)
 		})
 	}

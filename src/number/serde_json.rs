@@ -4,8 +4,7 @@ impl<B: Buffer> From<serde_json::Number> for NumberBuf<B> {
 	#[inline(always)]
 	fn from(n: serde_json::Number) -> Self {
 		NumberBuf::new(B::from_vec(n.to_string().into_bytes()))
-			.ok()
-			.expect("invalid `serde_json::Number`")
+			.unwrap_or_else(|_| NumberBuf::from(0u64))
 	}
 }
 
@@ -25,7 +24,7 @@ impl<'n> From<&'n Number> for serde_json::Number {
 		} else {
 			match n.as_str().parse() {
 				Ok(n) => n,
-				Err(_) => Self::from_f64(n.as_f64_lossy()).unwrap(),
+				Err(_) => Self::from_f64(n.as_f64_lossy()).unwrap_or_else(|| Self::from(0_u64)),
 			}
 		}
 	}

@@ -1,5 +1,6 @@
 //! JSON value kinds.
 use core::fmt;
+use core::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign};
 
 /// Value kind.
 ///
@@ -32,7 +33,7 @@ pub enum Kind {
 	Object,
 }
 
-impl std::ops::BitOr for Kind {
+impl BitOr for Kind {
 	type Output = KindSet;
 
 	fn bitor(self, other: Self) -> KindSet {
@@ -40,7 +41,7 @@ impl std::ops::BitOr for Kind {
 	}
 }
 
-impl std::ops::BitOr<KindSet> for Kind {
+impl BitOr<KindSet> for Kind {
 	type Output = KindSet;
 
 	fn bitor(self, other: KindSet) -> KindSet {
@@ -48,7 +49,7 @@ impl std::ops::BitOr<KindSet> for Kind {
 	}
 }
 
-impl std::ops::BitAnd for Kind {
+impl BitAnd for Kind {
 	type Output = KindSet;
 
 	fn bitand(self, other: Self) -> KindSet {
@@ -56,7 +57,7 @@ impl std::ops::BitAnd for Kind {
 	}
 }
 
-impl std::ops::BitAnd<KindSet> for Kind {
+impl BitAnd<KindSet> for Kind {
 	type Output = KindSet;
 
 	fn bitand(self, other: KindSet) -> KindSet {
@@ -150,7 +151,7 @@ macro_rules! kind_set {
 		}
 
 		/// Iterator over the [`Kind`]s of a [`KindSet`], in declaration order.
-		#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+		#[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 		pub struct KindSetIter(u8);
 
 		impl Iterator for KindSetIter {
@@ -190,37 +191,41 @@ macro_rules! kind_set {
 			}
 		}
 
-		impl std::iter::FusedIterator for KindSetIter {}
-		impl std::iter::ExactSizeIterator for KindSetIter {}
+		impl core::iter::FusedIterator for KindSetIter {}
+		impl core::iter::ExactSizeIterator for KindSetIter {}
 	};
 }
 
 kind_set! {
-	Null (NULL):       0b000001,
-	Boolean (BOOLEAN): 0b000010,
-	Number (NUMBER):   0b000100,
-	String (STRING):   0b001000,
-	Array (ARRAY):     0b010000,
-	Object (OBJECT):   0b100000
+	Null (NULL):       0b00_0001,
+	Boolean (BOOLEAN): 0b00_0010,
+	Number (NUMBER):   0b00_0100,
+	String (STRING):   0b00_1000,
+	Array (ARRAY):     0b01_0000,
+	Object (OBJECT):   0b10_0000
 }
 
 impl KindSet {
 	/// The empty set.
+	#[must_use]
 	pub const fn none() -> Self {
 		Self(0)
 	}
 
 	/// Returns the number of kinds in this set.
+	#[must_use]
 	pub const fn len(&self) -> usize {
 		self.0.count_ones() as usize
 	}
 
 	/// Checks if this set is empty.
+	#[must_use]
 	pub const fn is_empty(&self) -> bool {
 		self.0 == 0
 	}
 
 	/// Iterates over the kinds in this set, in declaration order.
+	#[must_use]
 	pub const fn iter(&self) -> KindSetIter {
 		KindSetIter(self.0)
 	}
@@ -237,6 +242,7 @@ impl KindSet {
 	/// assert_eq!(KindSet::all().as_disjunction().to_string(), "anything");
 	/// assert_eq!(KindSet::none().as_disjunction().to_string(), "nothing");
 	/// ```
+	#[must_use]
 	pub const fn as_disjunction(self) -> KindSetDisjunction {
 		KindSetDisjunction(self)
 	}
@@ -253,12 +259,13 @@ impl KindSet {
 	/// assert_eq!(KindSet::all().as_conjunction().to_string(), "anything");
 	/// assert_eq!(KindSet::none().as_conjunction().to_string(), "nothing");
 	/// ```
+	#[must_use]
 	pub const fn as_conjunction(self) -> KindSetConjunction {
 		KindSetConjunction(self)
 	}
 }
 
-impl std::ops::BitOr for KindSet {
+impl BitOr for KindSet {
 	type Output = Self;
 
 	fn bitor(self, other: Self) -> Self {
@@ -266,13 +273,13 @@ impl std::ops::BitOr for KindSet {
 	}
 }
 
-impl std::ops::BitOrAssign for KindSet {
+impl BitOrAssign for KindSet {
 	fn bitor_assign(&mut self, other: Self) {
-		self.0 |= other.0
+		self.0 |= other.0;
 	}
 }
 
-impl std::ops::BitAnd for KindSet {
+impl BitAnd for KindSet {
 	type Output = Self;
 
 	fn bitand(self, other: Self) -> Self {
@@ -280,9 +287,9 @@ impl std::ops::BitAnd for KindSet {
 	}
 }
 
-impl std::ops::BitAndAssign for KindSet {
+impl BitAndAssign for KindSet {
 	fn bitand_assign(&mut self, other: Self) {
-		self.0 &= other.0
+		self.0 &= other.0;
 	}
 }
 

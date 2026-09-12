@@ -36,6 +36,9 @@ const NUMBER_TOKEN: &str = "$serde_json::private::Number";
 /// let v = jstrict::to_value(u).unwrap();
 /// assert_eq!(v, expected);
 /// ```
+/// # Errors
+///
+/// Returns [`SerializeError`] if `value` cannot be serialized to JSON.
 pub fn to_value<T>(value: T) -> Result<Value, SerializeError>
 where
 	T: Serialize,
@@ -65,6 +68,9 @@ where
 /// let u: User = jstrict::from_value(j).unwrap();
 /// println!("{:#?}", u);
 /// ```
+/// # Errors
+///
+/// Returns [`DeserializeError`] if the JSON value does not match `T`.
 pub fn from_value<T>(value: Value) -> Result<T, DeserializeError>
 where
 	T: DeserializeOwned,

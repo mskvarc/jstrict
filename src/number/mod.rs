@@ -3,10 +3,14 @@
 //! Provides two types: the unsized [`Number`] type acting like `str`, and the
 //! [`NumberBuf<B>`] type owning the data inside the `B` type (by default
 //! `Vec<u8>`).
+use core::ptr;
+use lexical::format::JSON;
 use smallvec::SmallVec;
 use std::borrow::{Borrow, ToOwned};
+use std::error::Error as StdError;
 use std::fmt;
 use std::ops::Deref;
+use std::str;
 use std::str::FromStr;
 
 /// `serde` support for [`Number`] and [`NumberBuf`].
@@ -46,7 +50,7 @@ impl<T: fmt::Display> fmt::Display for InvalidNumber<T> {
 	}
 }
 
-impl<T: fmt::Display + fmt::Debug> std::error::Error for InvalidNumber<T> {}
+impl<T: fmt::Display + fmt::Debug> StdError for InvalidNumber<T> {}
 
 /// Number sign.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
@@ -64,30 +68,35 @@ pub enum Sign {
 impl Sign {
 	/// Checks if the number is zero.
 	#[inline(always)]
+	#[must_use]
 	pub const fn is_zero(&self) -> bool {
 		matches!(self, Self::Zero)
 	}
 
 	/// Checks if the number is non positive (negative or zero).
 	#[inline(always)]
+	#[must_use]
 	pub const fn is_non_positive(&self) -> bool {
 		matches!(self, Self::Negative | Self::Zero)
 	}
 
 	/// Checks if the number is non negative (positive or zero).
 	#[inline(always)]
+	#[must_use]
 	pub const fn is_non_negative(&self) -> bool {
 		matches!(self, Self::Positive | Self::Zero)
 	}
 
 	/// Checks if the number is strictly positive (non zero nor negative).
 	#[inline(always)]
+	#[must_use]
 	pub const fn is_positive(&self) -> bool {
 		matches!(self, Self::Positive)
 	}
 
 	/// Checks if the number is strictly negative (non zero nor positive).
 	#[inline(always)]
+	#[must_use]
 	pub const fn is_negative(&self) -> bool {
 		matches!(self, Self::Negative)
 	}
@@ -99,15 +108,17 @@ impl Sign {
 /// All the comparison operations are done on this *lexical* representation,
 /// meaning that `1` is actually greater than `0.1e+80` for instance.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[repr(transparent)]
 pub struct Number {
 	data: [u8],
 }
 
 impl Number {
 	/// Creates a new number by parsing the given input `data`.
+	/// # Errors
+	///
+	/// Returns [`InvalidNumber`] if `data` is not a valid JSON number.
 	pub fn new<B: AsRef<[u8]> + ?Sized>(data: &B) -> Result<&Number, InvalidNumber<&B>> {
-		let s = data.as_ref();
-
 		enum State {
 			Init,
 			FirstDigit,
@@ -120,6 +131,7 @@ impl Number {
 			ExponentRest,
 		}
 
+		let s = data.as_ref();
 		let mut state = State::Init;
 
 		for b in s {
@@ -160,11 +172,7 @@ impl Number {
 					b'0'..=b'9' => state = State::ExponentRest,
 					_ => return Err(InvalidNumber(data)),
 				},
-				State::ExponentFirst => match *b {
-					b'0'..=b'9' => state = State::ExponentRest,
-					_ => return Err(InvalidNumber(data)),
-				},
-				State::ExponentRest => match *b {
+				State::ExponentFirst | State::ExponentRest => match *b {
 					b'0'..=b'9' => state = State::ExponentRest,
 					_ => return Err(InvalidNumber(data)),
 				},
@@ -188,15 +196,16 @@ impl Number {
 	/// The `data` input **must** be a valid JSON number.
 	#[inline(always)]
 	pub unsafe fn new_unchecked<B: AsRef<[u8]> + ?Sized>(data: &B) -> &Number {
-		unsafe { std::mem::transmute(data.as_ref()) }
+		unsafe { &*(ptr::from_ref(data.as_ref()) as *const Number) }
 	}
 
 	/// Returns the lexical representation of this number.
 	#[inline(always)]
+	#[must_use]
 	pub const fn as_str(&self) -> &str {
 		unsafe {
 			// safe because `self.data` is always a valid UTF-8 sequence.
-			std::str::from_utf8_unchecked(&self.data)
+			str::from_utf8_unchecked(&self.data)
 		}
 	}
 
@@ -204,6 +213,7 @@ impl Number {
 	///
 	/// `1.10000` becomes `1.1`, `1.0` becomes `1`. The exponent part, if any,
 	/// is left untouched.
+	#[must_use]
 	pub fn trimmed(&self) -> &Self {
 		let mut end = 1;
 		let mut i = 1;
@@ -215,7 +225,7 @@ impl Number {
 				_ => end = i + 1,
 			}
 
-			i += 1
+			i += 1;
 		}
 
 		unsafe { Self::new_unchecked(&self.data[0..end]) }
@@ -227,6 +237,7 @@ impl Number {
 	/// the decimal and fraction part are composed of only
 	/// `0`, maybe preceded with `-`, and an arbitrary exponent part.
 	#[inline(always)]
+	#[must_use]
 	pub fn is_zero(&self) -> bool {
 		for b in &self.data {
 			match b {
@@ -240,6 +251,7 @@ impl Number {
 	}
 
 	/// Returns the sign of the number.
+	#[must_use]
 	pub fn sign(&self) -> Sign {
 		let mut non_negative = true;
 
@@ -263,30 +275,35 @@ impl Number {
 
 	/// Checks if the number is non positive (negative or zero).
 	#[inline(always)]
+	#[must_use]
 	pub fn is_non_positive(&self) -> bool {
 		self.sign().is_non_positive()
 	}
 
 	/// Checks if the number is non negative (positive or zero).
 	#[inline(always)]
+	#[must_use]
 	pub fn is_non_negative(&self) -> bool {
 		self.sign().is_non_negative()
 	}
 
 	/// Checks if the number is strictly positive (non zero nor negative).
 	#[inline(always)]
+	#[must_use]
 	pub fn is_positive(&self) -> bool {
 		self.sign().is_positive()
 	}
 
 	/// Checks if the number is strictly negative (non zero nor positive).
 	#[inline(always)]
+	#[must_use]
 	pub fn is_negative(&self) -> bool {
 		self.sign().is_negative()
 	}
 
 	/// Checks if the number has a decimal point.
 	#[inline(always)]
+	#[must_use]
 	pub fn has_decimal_point(&self) -> bool {
 		self.data.contains(&b'.')
 	}
@@ -295,12 +312,14 @@ impl Number {
 	///
 	/// This is an alias for [`has_decimal_point`](Self::has_decimal_point).
 	#[inline(always)]
+	#[must_use]
 	pub fn has_fraction(&self) -> bool {
 		self.has_decimal_point()
 	}
 
 	/// Checks if the number has an exponent part.
 	#[inline(always)]
+	#[must_use]
 	pub fn has_exponent(&self) -> bool {
 		for b in &self.data {
 			if matches!(b, b'e' | b'E') {
@@ -313,24 +332,28 @@ impl Number {
 
 	/// Checks if this number is exactly representable as an `i32`.
 	#[inline(always)]
+	#[must_use]
 	pub fn is_i32(&self) -> bool {
 		self.as_i32().is_some()
 	}
 
 	/// Checks if this number is exactly representable as an `i64`.
 	#[inline(always)]
+	#[must_use]
 	pub fn is_i64(&self) -> bool {
 		self.as_i64().is_some()
 	}
 
 	/// Checks if this number is exactly representable as a `u32`.
 	#[inline(always)]
+	#[must_use]
 	pub fn is_u32(&self) -> bool {
 		self.as_u32().is_some()
 	}
 
 	/// Checks if this number is exactly representable as a `u64`.
 	#[inline(always)]
+	#[must_use]
 	pub fn is_u64(&self) -> bool {
 		self.as_u64().is_some()
 	}
@@ -338,6 +361,7 @@ impl Number {
 	/// Returns this number as an `i32`, or `None` if it is not an integer in
 	/// range.
 	#[inline(always)]
+	#[must_use]
 	pub fn as_i32(&self) -> Option<i32> {
 		self.as_str().parse().ok()
 	}
@@ -345,6 +369,7 @@ impl Number {
 	/// Returns this number as an `i64`, or `None` if it is not an integer in
 	/// range.
 	#[inline(always)]
+	#[must_use]
 	pub fn as_i64(&self) -> Option<i64> {
 		self.as_str().parse().ok()
 	}
@@ -352,6 +377,7 @@ impl Number {
 	/// Returns this number as a `u32`, or `None` if it is not an integer in
 	/// range.
 	#[inline(always)]
+	#[must_use]
 	pub fn as_u32(&self) -> Option<u32> {
 		self.as_str().parse().ok()
 	}
@@ -359,18 +385,17 @@ impl Number {
 	/// Returns this number as a `u64`, or `None` if it is not an integer in
 	/// range.
 	#[inline(always)]
+	#[must_use]
 	pub fn as_u64(&self) -> Option<u64> {
 		self.as_str().parse().ok()
 	}
 
 	/// Returns this number as an `f32`, rounding if necessary.
 	#[inline(always)]
+	#[must_use]
 	pub fn as_f32_lossy(&self) -> f32 {
-		lexical::parse_with_options::<_, _, { lexical::format::JSON }>(
-			self.as_bytes(),
-			&LOSSY_PARSE_FLOAT,
-		)
-		.unwrap()
+		lexical::parse_with_options::<_, _, { JSON }>(self.as_bytes(), &LOSSY_PARSE_FLOAT)
+			.unwrap_or(f32::NAN)
 	}
 
 	/// Returns the number as a `f32` only if the operation does not induce
@@ -379,9 +404,12 @@ impl Number {
 	/// This operation is expensive as it requires allocating a new number
 	/// buffer to check the decimal representation of the generated `f32`.
 	#[inline(always)]
+	#[must_use]
 	pub fn as_f32_lossless(&self) -> Option<f32> {
 		let f = self.as_f32_lossy();
-		let n: NumberBuf = f.try_into().unwrap();
+		let Ok(n) = <NumberBuf as TryFrom<f32>>::try_from(f) else {
+			return None;
+		};
 		if n.as_number() == self.trimmed() {
 			Some(f)
 		} else {
@@ -391,12 +419,10 @@ impl Number {
 
 	/// Returns this number as an `f64`, rounding if necessary.
 	#[inline(always)]
+	#[must_use]
 	pub fn as_f64_lossy(&self) -> f64 {
-		lexical::parse_with_options::<_, _, { lexical::format::JSON }>(
-			self.as_bytes(),
-			&LOSSY_PARSE_FLOAT,
-		)
-		.unwrap()
+		lexical::parse_with_options::<_, _, { JSON }>(self.as_bytes(), &LOSSY_PARSE_FLOAT)
+			.unwrap_or(f64::NAN)
 	}
 
 	/// Returns the number as a `f64` only if the operation does not induce
@@ -405,9 +431,12 @@ impl Number {
 	/// This operation is expensive as it requires allocating a new number
 	/// buffer to check the decimal representation of the generated `f64`.
 	#[inline(always)]
+	#[must_use]
 	pub fn as_f64_lossless(&self) -> Option<f64> {
 		let f = self.as_f64_lossy();
-		let n: NumberBuf = f.try_into().unwrap();
+		let Ok(n) = <NumberBuf as TryFrom<f64>>::try_from(f) else {
+			return None;
+		};
 		if n.as_number() == self { Some(f) } else { None }
 	}
 
@@ -421,6 +450,7 @@ impl Number {
 	/// Returns the canonical representation of this number according to
 	/// [RFC8785](https://www.rfc-editor.org/rfc/rfc8785#name-serialization-of-numbers).
 	#[cfg(feature = "canonicalize")]
+	#[must_use]
 	pub fn canonical(&self) -> NumberBuf {
 		let mut buffer = ryu_js::Buffer::new();
 		self.canonical_with(&mut buffer).to_owned()
@@ -526,6 +556,9 @@ pub struct NumberBuf<B = Vec<u8>> {
 impl<B> NumberBuf<B> {
 	/// Creates a new number buffer by parsing the given input `data` buffer.
 	#[inline(always)]
+	/// # Errors
+	///
+	/// Returns [`InvalidNumber`] if `data` is not a valid JSON number.
 	pub fn new(data: B) -> Result<Self, InvalidNumber<B>>
 	where
 		B: AsRef<[u8]>,
@@ -548,6 +581,7 @@ impl<B> NumberBuf<B> {
 
 	/// Creates a number buffer from the given `number`.
 	#[inline(always)]
+	#[must_use]
 	pub fn from_number(n: &Number) -> Self
 	where
 		B: FromIterator<u8>,
@@ -571,6 +605,7 @@ impl<B> NumberBuf<B> {
 impl NumberBuf<String> {
 	/// Consumes this number, returning its lexical representation.
 	#[inline(always)]
+	#[must_use]
 	pub fn into_string(self) -> String {
 		self.data
 	}
@@ -578,6 +613,7 @@ impl NumberBuf<String> {
 	/// Consumes this number, returning the bytes of its lexical
 	/// representation.
 	#[inline(always)]
+	#[must_use]
 	pub fn into_bytes(self) -> Vec<u8> {
 		self.data.into_bytes()
 	}
@@ -726,7 +762,7 @@ mod tests {
 	fn trimming_test(a: &str, b: &str) {
 		let a = Number::new(a).unwrap();
 		let b = Number::new(b).unwrap();
-		assert_eq!(a.trimmed(), b)
+		assert_eq!(a.trimmed(), b);
 	}
 
 	#[test]

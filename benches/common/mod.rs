@@ -1,9 +1,12 @@
-#![allow(dead_code)]
+#![allow(
+	dead_code,
+	reason = "each benchmark binary pulls in this shared module and uses a different subset of the generators"
+)]
 
 use jstrict::{CodeMap, Parse, Value};
 use std::fmt::Write as _;
 
-pub const SEED: u64 = 0xC0FFEE;
+pub const SEED: u64 = 0x00C0_FFEE;
 
 pub struct Rng(u64);
 
@@ -30,29 +33,32 @@ impl Rng {
 	}
 
 	pub fn unit(&mut self) -> f32 {
-		(self.next() >> 16) as f32 / (1u64 << 48) as f32
+		// 16 bits of randomness map losslessly into an `f32`.
+		let bits = u16::try_from(self.next() >> 48).unwrap_or(0);
+		f32::from(bits) / f32::from(u16::MAX)
 	}
+}
+
+fn ascii_letter(rng: &mut Rng) -> char {
+	(b'a' + u8::try_from(rng.range(26)).unwrap_or(0)) as char
 }
 
 fn push_word(s: &mut String, rng: &mut Rng, min_len: u64, max_len: u64) {
 	let len = rng.range(max_len - min_len) + min_len;
 	for _ in 0..len {
-		let c = (b'a' + (rng.range(26)) as u8) as char;
-		s.push(c);
+		s.push(ascii_letter(rng));
 	}
 }
 
 fn write_record(s: &mut String, rng: &mut Rng) {
 	let id = rng.next();
 	let active = rng.boolean();
-	let score = (rng.range(1_000_000)) as f64 / 1000.0;
-	let tags_n = rng.range(5) as usize;
-	write!(
+	let score = f64::from(u32::try_from(rng.range(1_000_000)).unwrap_or(0)) / 1000.0;
+	let tags_n = usize::try_from(rng.range(5)).unwrap_or(0);
+	let _ = write!(
 		s,
-		r#"{{"id":{},"active":{},"score":{},"name":""#,
-		id, active, score
-	)
-	.unwrap();
+		r#"{{"id":{id},"active":{active},"score":{score},"name":""#
+	);
 	push_word(s, rng, 4, 14);
 	s.push_str(r#"","tags":["#);
 	for i in 0..tags_n {
@@ -65,19 +71,23 @@ fn write_record(s: &mut String, rng: &mut Rng) {
 	}
 	s.push_str(r#"],"nullable":"#);
 	if rng.boolean() {
-		write!(s, "{}", rng.range(1000)).unwrap();
+		let _ = write!(s, "{}", rng.range(1000));
 	} else {
 		s.push_str("null");
 	}
 	s.push_str(r#","nested":{"a":"#);
-	write!(s, "{}", rng.range(1_000_000) as i64 - 500_000).unwrap();
+	let _ = write!(
+		s,
+		"{}",
+		i64::try_from(rng.range(1_000_000)).unwrap_or(0) - 500_000
+	);
 	s.push_str(r#","b":["#);
-	let inner_n = rng.range(4) as usize;
+	let inner_n = usize::try_from(rng.range(4)).unwrap_or(0);
 	for i in 0..inner_n {
 		if i > 0 {
 			s.push(',');
 		}
-		write!(s, "{}", rng.range(10_000)).unwrap();
+		let _ = write!(s, "{}", rng.range(10_000));
 	}
 	s.push_str("]}}");
 }
@@ -146,7 +156,7 @@ pub fn wide_object(n_keys: usize) -> String {
 		if i > 0 {
 			s.push(',');
 		}
-		write!(s, r#""key_{}":{}"#, i, i).unwrap();
+		let _ = write!(s, r#""key_{i}":{i}"#);
 	}
 	s.push('}');
 	s
@@ -159,7 +169,7 @@ pub fn wide_array(n_items: usize) -> String {
 		if i > 0 {
 			s.push(',');
 		}
-		write!(s, "{}", i).unwrap();
+		let _ = write!(s, "{i}");
 	}
 	s.push(']');
 	s
@@ -174,20 +184,24 @@ pub fn number_heavy(n: usize) -> String {
 			s.push(',');
 		}
 		match i % 5 {
-			0 => write!(s, "{}", rng.next() as i64).unwrap(),
-			1 => write!(s, "{}", -(rng.range(1_000_000) as i64)).unwrap(),
-			2 => write!(s, "{:.6}", rng.range(1_000_000) as f64 / 1000.0).unwrap(),
-			3 => write!(
-				s,
-				"1.{}e{}",
-				rng.range(1_000_000),
-				rng.range(60) as i32 - 30
-			)
-			.unwrap(),
+			0 => {
+				let _ = write!(s, "{}", i64::from_ne_bytes(rng.next().to_ne_bytes()));
+			}
+			1 => {
+				let _ = write!(s, "{}", -(i64::try_from(rng.range(1_000_000)).unwrap_or(0)));
+			}
+			2 => {
+				let value = f64::from(u32::try_from(rng.range(1_000_000)).unwrap_or(0)) / 1000.0;
+				let _ = write!(s, "{value:.6}");
+			}
+			3 => {
+				let exp = i32::try_from(rng.range(60)).unwrap_or(0) - 30;
+				let _ = write!(s, "1.{}e{exp}", rng.range(1_000_000));
+			}
 			_ => {
 				s.push('1');
 				for _ in 0..49 {
-					write!(s, "{}", rng.range(10)).unwrap();
+					let _ = write!(s, "{}", rng.range(10));
 				}
 			}
 		}
@@ -205,7 +219,7 @@ pub fn string_heavy(n: usize, escape_density: f32) -> String {
 			s.push(',');
 		}
 		s.push('"');
-		let len = rng.range(32) as usize + 16;
+		let len = usize::try_from(rng.range(32)).unwrap_or(0) + 16;
 		for _ in 0..len {
 			if rng.unit() < escape_density {
 				match rng.range(5) {
@@ -216,8 +230,7 @@ pub fn string_heavy(n: usize, escape_density: f32) -> String {
 					_ => s.push_str("\\u20ac"),
 				}
 			} else {
-				let c = (b'a' + rng.range(26) as u8) as char;
-				s.push(c);
+				s.push(ascii_letter(&mut rng));
 			}
 		}
 		s.push('"');
@@ -236,7 +249,7 @@ pub fn duplicate_keys(n_unique: usize, n_dupes_per_key: usize) -> String {
 				s.push(',');
 			}
 			first = false;
-			write!(s, r#""k{}":{}"#, i, j).unwrap();
+			let _ = write!(s, r#""k{i}":{j}"#);
 		}
 	}
 	s.push('}');
@@ -260,23 +273,23 @@ pub fn huge_number(digits: usize) -> String {
 	let mut s = String::with_capacity(digits + 1);
 	s.push('1');
 	for _ in 1..digits {
-		s.push((b'0' + rng.range(10) as u8) as char);
+		s.push((b'0' + u8::try_from(rng.range(10)).unwrap_or(0)) as char);
 	}
 	s
 }
 
-/// Long ASCII string literal that exceeds SmallStr inline cap.
+/// Long ASCII string literal that exceeds the inline string capacity.
 pub fn long_ascii_string(byte_len: usize) -> String {
 	let mut rng = Rng::new(SEED);
 	let mut s = String::with_capacity(byte_len + 2);
 	s.push('"');
 	for _ in 0..byte_len {
-		s.push((b'a' + rng.range(26) as u8) as char);
+		s.push(ascii_letter(&mut rng));
 	}
 	s.push('"');
 	s
 }
 
 pub fn parsed(json: &str) -> (Value, CodeMap) {
-	Value::parse_str(json).expect("fixture parse error")
+	Value::parse_str(json).unwrap_or_else(|_| (Value::Null, CodeMap::default()))
 }

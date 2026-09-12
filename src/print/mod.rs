@@ -11,6 +11,9 @@
 //!
 //! Strings are escaped per
 //! [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785#name-serialization-of-strings).
+use crate::byte_scan::find_escape;
+use core::str;
+use std::cell::RefCell;
 use std::fmt;
 
 #[cfg(feature = "contextual")]
@@ -31,6 +34,7 @@ pub enum Indent {
 
 impl Indent {
 	/// Repeats this indentation unit `n` times.
+	#[must_use]
 	pub const fn by(self, n: usize) -> IndentBy {
 		IndentBy(self, n)
 	}
@@ -41,12 +45,12 @@ impl fmt::Display for Indent {
 		match self {
 			Self::Spaces(n) => {
 				for _ in 0..*n {
-					f.write_str(" ")?
+					f.write_str(" ")?;
 				}
 			}
 			Self::Tabs(n) => {
 				for _ in 0..*n {
-					f.write_str("\t")?
+					f.write_str("\t")?;
 				}
 			}
 		}
@@ -61,7 +65,7 @@ pub struct IndentBy(Indent, usize);
 impl fmt::Display for IndentBy {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		for _ in 0..self.1 {
-			self.0.fmt(f)?
+			self.0.fmt(f)?;
 		}
 
 		Ok(())
@@ -74,7 +78,7 @@ pub struct Spaces(pub usize);
 impl fmt::Display for Spaces {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		for _ in 0..self.0 {
-			f.write_str(" ")?
+			f.write_str(" ")?;
 		}
 
 		Ok(())
@@ -96,7 +100,7 @@ impl fmt::Display for Padding {
 		match self {
 			Self::Spaces(n) => {
 				for _ in 0..*n {
-					f.write_str(" ")?
+					f.write_str(" ")?;
 				}
 			}
 			Self::NewLine => f.write_str("\n")?,
@@ -178,6 +182,7 @@ pub struct Options {
 impl Options {
 	/// Pretty print options.
 	#[inline(always)]
+	#[must_use]
 	pub const fn pretty() -> Self {
 		Self {
 			indent: Indent::Spaces(2),
@@ -202,6 +207,7 @@ impl Options {
 	///
 	/// Values will be formatted on a single line without spaces.
 	#[inline(always)]
+	#[must_use]
 	pub const fn compact() -> Self {
 		Self {
 			indent: Indent::Spaces(0),
@@ -226,6 +232,7 @@ impl Options {
 	///
 	/// Values will be formatted on a single line with some spaces.
 	#[inline(always)]
+	#[must_use]
 	pub const fn inline() -> Self {
 		Self {
 			indent: Indent::Spaces(0),
@@ -298,6 +305,9 @@ pub trait Print {
 
 	/// Writes the value to `f` with the given options, starting at the given
 	/// indentation level.
+	/// # Errors
+	///
+	/// Returns [`fmt::Error`] if writing to the formatter fails.
 	fn fmt_with(&self, f: &mut fmt::Formatter, options: &Options, indent: usize) -> fmt::Result;
 }
 
@@ -314,6 +324,9 @@ impl<T: Print + ?Sized> Print for &T {
 /// depth-first order, and `index` walks through them as printing proceeds.
 pub trait PrintWithSize {
 	/// Writes the value to `f`, taking its layout from `sizes[*index]`.
+	/// # Errors
+	///
+	/// Returns [`fmt::Error`] if writing to the formatter fails.
 	fn fmt_with_size(
 		&self,
 		f: &mut fmt::Formatter,
@@ -340,7 +353,7 @@ impl<T: PrintWithSize + ?Sized> PrintWithSize for &T {
 /// Printed value.
 pub struct Printed<'t, T: ?Sized>(&'t T, Options, usize);
 
-impl<'t, T: Print> fmt::Display for Printed<'t, T> {
+impl<T: Print> fmt::Display for Printed<'_, T> {
 	#[inline(always)]
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		self.0.fmt_with(f, &self.1, self.2)
@@ -400,8 +413,8 @@ fn write_escape(b: u8, f: &mut fmt::Formatter) -> fmt::Result {
 			f.write_str("\\u00")?;
 			let hi = (c >> 4) & 0x0f;
 			let lo = c & 0x0f;
-			f.write_str(&HEX[hi as usize..hi as usize + 1])?;
-			f.write_str(&HEX[lo as usize..lo as usize + 1])
+			f.write_str(&HEX[(hi as usize)..=(hi as usize)])?;
+			f.write_str(&HEX[(lo as usize)..=(lo as usize)])
 		}
 	}
 }
@@ -414,30 +427,33 @@ const HEX: &str = "0123456789abcdef";
 const SIMD_ESCAPE_MIN: usize = 64;
 
 thread_local! {
-	static ESCAPE_BUFFER: std::cell::RefCell<Vec<u8>> =
-		std::cell::RefCell::new(Vec::with_capacity(256));
+	static ESCAPE_BUFFER: RefCell<Vec<u8>> =
+		RefCell::new(Vec::with_capacity(256));
 }
 
 /// Formats a string literal according to [RFC8785](https://www.rfc-editor.org/rfc/rfc8785#name-serialization-of-strings).
+/// # Errors
+///
+/// Returns [`fmt::Error`] if writing to the formatter fails.
 pub fn string_literal(s: &str, f: &mut fmt::Formatter) -> fmt::Result {
 	let bytes = s.as_bytes();
 	if bytes.len() < SIMD_ESCAPE_MIN {
 		f.write_str("\"")?;
 		let mut start = 0;
-		while let Some(off) = crate::byte_scan::find_escape(&bytes[start..]) {
+		while let Some(off) = find_escape(&bytes[start..]) {
 			let i = start + off;
 			if start < i {
 				// SAFETY: bytes[start..i] is a prefix-aligned slice of the
 				// original `&str`. Escape bytes are all ASCII, so any
 				// boundary between them lies on a UTF-8 char boundary.
-				let run = unsafe { core::str::from_utf8_unchecked(&bytes[start..i]) };
+				let run = unsafe { str::from_utf8_unchecked(&bytes[start..i]) };
 				f.write_str(run)?;
 			}
 			write_escape(bytes[i], f)?;
 			start = i + 1;
 		}
 		if start < bytes.len() {
-			let run = unsafe { core::str::from_utf8_unchecked(&bytes[start..]) };
+			let run = unsafe { str::from_utf8_unchecked(&bytes[start..]) };
 			f.write_str(run)?;
 		}
 		f.write_str("\"")
@@ -453,12 +469,13 @@ pub fn string_literal(s: &str, f: &mut fmt::Formatter) -> fmt::Result {
 			// the original UTF-8 source bytes. The two surrounding `"` and
 			// any escape bytes are ASCII, and untouched runs of input are
 			// already valid UTF-8.
-			f.write_str(unsafe { core::str::from_utf8_unchecked(buf) })
+			f.write_str(unsafe { str::from_utf8_unchecked(buf) })
 		})
 	}
 }
 
 /// Returns the byte length of string literal according to [RFC8785](https://www.rfc-editor.org/rfc/rfc8785#name-serialization-of-strings).
+#[must_use]
 pub fn printed_string_size(s: &str) -> usize {
 	let mut width = 2usize;
 	for &b in s.as_bytes() {
@@ -478,6 +495,9 @@ impl Print for crate::String {
 }
 
 /// Writes `items` as a JSON array, using the layout at `sizes[*index]`.
+/// # Errors
+///
+/// Returns [`fmt::Error`] if writing to the formatter fails.
 pub fn print_array<I: IntoIterator>(
 	items: I,
 	f: &mut fmt::Formatter,
@@ -513,11 +533,11 @@ where
 				for (i, item) in items.enumerate() {
 					if i > 0 {
 						Spaces(options.array_before_comma).fmt(f)?;
-						f.write_str(",\n")?
+						f.write_str(",\n")?;
 					}
 
 					options.indent.by(indent + 1).fmt(f)?;
-					item.fmt_with_size(f, options, indent + 1, sizes, index)?
+					item.fmt_with_size(f, options, indent + 1, sizes, index)?;
 				}
 
 				f.write_str("\n")?;
@@ -529,12 +549,12 @@ where
 					if i > 0 {
 						Spaces(options.array_before_comma).fmt(f)?;
 						f.write_str(",")?;
-						Spaces(options.array_after_comma).fmt(f)?
+						Spaces(options.array_after_comma).fmt(f)?;
 					}
 
-					item.fmt_with_size(f, options, indent + 1, sizes, index)?
+					item.fmt_with_size(f, options, indent + 1, sizes, index)?;
 				}
-				Spaces(options.array_end).fmt(f)?
+				Spaces(options.array_end).fmt(f)?;
 			}
 		}
 	}
@@ -557,6 +577,9 @@ impl<T: PrintWithSize> PrintWithSize for Vec<T> {
 }
 
 /// Writes `entries` as a JSON object, using the layout at `sizes[*index]`.
+/// # Errors
+///
+/// Returns [`fmt::Error`] if writing to the formatter fails.
 pub fn print_object<'a, V, I: IntoIterator<Item = (&'a str, V)>>(
 	entries: I,
 	f: &mut fmt::Formatter,
@@ -592,7 +615,7 @@ where
 				for (i, (key, value)) in entries.enumerate() {
 					if i > 0 {
 						Spaces(options.object_before_comma).fmt(f)?;
-						f.write_str(",\n")?
+						f.write_str(",\n")?;
 					}
 
 					options.indent.by(indent + 1).fmt(f)?;
@@ -602,7 +625,7 @@ where
 					f.write_str(":")?;
 					Spaces(options.object_after_colon).fmt(f)?;
 
-					value.fmt_with_size(f, options, indent + 1, sizes, index)?
+					value.fmt_with_size(f, options, indent + 1, sizes, index)?;
 				}
 
 				f.write_str("\n")?;
@@ -614,7 +637,7 @@ where
 					if i > 0 {
 						Spaces(options.object_before_comma).fmt(f)?;
 						f.write_str(",")?;
-						Spaces(options.object_after_comma).fmt(f)?
+						Spaces(options.object_after_comma).fmt(f)?;
 					}
 
 					string_literal(key, f)?;
@@ -622,9 +645,9 @@ where
 					f.write_str(":")?;
 					Spaces(options.object_after_colon).fmt(f)?;
 
-					value.fmt_with_size(f, options, indent + 1, sizes, index)?
+					value.fmt_with_size(f, options, indent + 1, sizes, index)?;
 				}
-				Spaces(options.object_end).fmt(f)?
+				Spaces(options.object_end).fmt(f)?;
 			}
 		}
 	}
@@ -720,7 +743,7 @@ where
 		}
 
 		size.add(item.pre_compute_size(options, sizes));
-		len += 1
+		len += 1;
 	}
 
 	let size = match size {

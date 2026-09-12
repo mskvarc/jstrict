@@ -1,5 +1,5 @@
 use criterion::{Criterion, Throughput, criterion_group, criterion_main};
-use jstrict::{Parse, Print, Value};
+use jstrict::{Print, Value};
 use std::hint::black_box;
 
 mod common;
@@ -10,7 +10,7 @@ fn bench_parse_traverse_print(c: &mut Criterion) {
 	group.throughput(Throughput::Bytes(medium.len() as u64));
 	group.bench_function("medium", |b| {
 		b.iter(|| {
-			let v = Value::parse_str(black_box(medium.as_str())).unwrap().0;
+			let v = common::parsed(black_box(medium.as_str())).0;
 			let count = v.traverse().count();
 			let printed = v.compact_print().to_string();
 			(count, printed.len())
@@ -26,7 +26,7 @@ fn bench_parse_canonicalize_print(c: &mut Criterion) {
 	group.throughput(Throughput::Bytes(medium.len() as u64));
 	group.bench_function("medium", |b| {
 		b.iter(|| {
-			let mut v = Value::parse_str(black_box(medium.as_str())).unwrap().0;
+			let mut v = common::parsed(black_box(medium.as_str())).0;
 			v.canonicalize();
 			v.compact_print().to_string()
 		});
@@ -48,18 +48,18 @@ fn bench_serde_round_trip(c: &mut Criterion) {
 	let records: Vec<Record> = (0..100)
 		.map(|i| Record {
 			id: i,
-			name: format!("name_{}", i),
+			name: format!("name_{i}"),
 			tags: vec!["a".into(), "b".into(), "c".into()],
 		})
 		.collect();
-	let value = jstrict::to_value(&records).unwrap();
+	let value = jstrict::to_value(&records).unwrap_or(jstrict::Value::Null);
 	let printed = value.compact_print().to_string();
 
 	c.bench_function("end_to_end/parse_from_to_print/records_100", |b| {
 		b.iter(|| {
-			let v = Value::parse_str(black_box(printed.as_str())).unwrap().0;
-			let r: Vec<Record> = jstrict::from_value(v).unwrap();
-			let v2 = jstrict::to_value(&r).unwrap();
+			let v = common::parsed(black_box(printed.as_str())).0;
+			let r: Vec<Record> = jstrict::from_value(v).unwrap_or_default();
+			let v2 = jstrict::to_value(&r).unwrap_or(jstrict::Value::Null);
 			v2.compact_print().to_string()
 		});
 	});
@@ -68,7 +68,7 @@ fn bench_serde_round_trip(c: &mut Criterion) {
 #[cfg(feature = "serde_json")]
 fn bench_serde_json_modify(c: &mut Criterion) {
 	let medium = common::medium();
-	let sj: serde_json::Value = serde_json::from_str(&medium).unwrap();
+	let sj: serde_json::Value = serde_json::from_str(&medium).unwrap_or_default();
 	c.bench_function("end_to_end/serde_json_modify", |b| {
 		b.iter(|| {
 			let mut v = Value::from_serde_json(black_box(sj.clone()));

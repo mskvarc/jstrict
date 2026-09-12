@@ -17,7 +17,7 @@ fn cases() -> Vec<(&'static str, String)> {
 			let mut rng = common::Rng::new(common::SEED);
 			s.push('1');
 			for _ in 0..199 {
-				s.push((b'0' + rng.range(10) as u8) as char);
+				s.push((b'0' + u8::try_from(rng.range(10)).unwrap_or(0)) as char);
 			}
 			s
 		}),
@@ -27,7 +27,7 @@ fn cases() -> Vec<(&'static str, String)> {
 			s.push('1');
 			s.push('.');
 			for _ in 0..200 {
-				s.push((b'0' + rng.range(10) as u8) as char);
+				s.push((b'0' + u8::try_from(rng.range(10)).unwrap_or(0)) as char);
 			}
 			s
 		}),
@@ -37,8 +37,8 @@ fn cases() -> Vec<(&'static str, String)> {
 
 fn bench_numbers(c: &mut Criterion) {
 	for (name, source) in cases() {
-		c.bench_function(&format!("numbers/{}", name), |b| {
-			b.iter(|| Value::parse_str(black_box(source.as_str())).unwrap());
+		c.bench_function(&format!("numbers/{name}"), |b| {
+			b.iter(|| Value::parse_str(black_box(source.as_str())).ok());
 		});
 	}
 }

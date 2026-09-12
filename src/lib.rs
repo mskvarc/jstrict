@@ -61,11 +61,21 @@
 //! | `contextual`   |         | `contextual::WithContext` printing adapters                                      |
 #![cfg_attr(docsrs, feature(doc_cfg), doc(auto_cfg))]
 #![warn(missing_docs)]
+#![allow(
+	clippy::inline_always,
+	reason = "the parser, printer and number buffers force-inline their hot accessors deliberately; the annotations were benchmarked and removing them regresses the tight per-byte loops"
+)]
 
 pub mod number;
+use crate::number::SmallNumberBuf;
 pub use crate::number::{InvalidNumber, Number, Sign, TryFromFloatError};
 use compact_str::CompactString;
+use core::slice;
 use smallvec::SmallVec;
+#[cfg(feature = "canonicalize")]
+use std::cell::RefCell;
+use std::mem;
+use std::string::String as StdString;
 use std::{fmt, str::FromStr};
 
 pub mod array;
@@ -115,7 +125,7 @@ pub use object::Object;
 pub const NUMBER_CAPACITY: usize = 16;
 
 /// Number buffer.
-pub type NumberBuf = crate::number::SmallNumberBuf<NUMBER_CAPACITY>;
+pub type NumberBuf = SmallNumberBuf<NUMBER_CAPACITY>;
 
 /// JSON Value.
 ///
@@ -205,6 +215,11 @@ pub enum Value {
 /// first fragment of the first item. On failure, returns the number of
 /// fragments left to skip past the end of `array`, so callers can chain
 /// lookups across sibling values.
+///
+/// # Errors
+///
+/// Returns the number of fragments past the end of `array` when `index` does
+/// not resolve to a fragment within it.
 pub fn get_array_fragment(array: &[Value], mut index: usize) -> Result<FragmentRef<'_>, usize> {
 	for v in array {
 		match v.get_fragment(index) {
@@ -223,6 +238,11 @@ impl Value {
 	/// Fragment indices match [`CodeMap`] offsets: the fragment returned for
 	/// index `i` is described by `code_map[offset + i]`. On failure, returns
 	/// the number of fragments left to skip.
+	///
+	/// # Errors
+	///
+	/// Returns the number of fragments left to skip past `self` when `index`
+	/// does not resolve to a fragment within it.
 	pub fn get_fragment(&self, index: usize) -> Result<FragmentRef<'_>, usize> {
 		if index == 0 {
 			Ok(FragmentRef::Value(self))
@@ -230,13 +250,14 @@ impl Value {
 			match self {
 				Self::Array(a) => get_array_fragment(a, index - 1),
 				Self::Object(o) => o.get_fragment(index - 1),
-				_ => Err(index - 1),
+				Self::Null | Self::Boolean(_) | Self::Number(_) | Self::String(_) => Err(index - 1),
 			}
 		}
 	}
 
 	/// Returns the [`Kind`] of this value.
 	#[inline]
+	#[must_use]
 	pub const fn kind(&self) -> Kind {
 		match self {
 			Self::Null => Kind::Null,
@@ -250,62 +271,73 @@ impl Value {
 
 	/// Checks if this value is of the given `kind`.
 	#[inline]
+	#[must_use]
 	pub fn is_kind(&self, kind: Kind) -> bool {
 		self.kind() == kind
 	}
 
 	/// Checks if this value is `null`.
 	#[inline]
+	#[must_use]
 	pub const fn is_null(&self) -> bool {
 		matches!(self, Self::Null)
 	}
 
 	/// Checks if this value is a boolean.
 	#[inline]
+	#[must_use]
 	pub const fn is_boolean(&self) -> bool {
 		matches!(self, Self::Boolean(_))
 	}
 
 	/// Checks if this value is a number.
 	#[inline]
+	#[must_use]
 	pub const fn is_number(&self) -> bool {
 		matches!(self, Self::Number(_))
 	}
 
 	/// Checks if this value is a string.
 	#[inline]
+	#[must_use]
 	pub const fn is_string(&self) -> bool {
 		matches!(self, Self::String(_))
 	}
 
 	/// Checks if this value is an array.
 	#[inline]
+	#[must_use]
 	pub const fn is_array(&self) -> bool {
 		matches!(self, Self::Array(_))
 	}
 
 	/// Checks if this value is an object.
 	#[inline]
+	#[must_use]
 	pub const fn is_object(&self) -> bool {
 		matches!(self, Self::Object(_))
 	}
 
 	/// Checks if the value is either an empty array or an empty object.
 	#[inline]
+	#[must_use]
 	pub const fn is_empty_array_or_object(&self) -> bool {
 		match self {
 			Self::Array(a) => a.is_empty(),
 			Self::Object(o) => o.is_empty(),
-			_ => false,
+			Self::Null | Self::Boolean(_) | Self::Number(_) | Self::String(_) => false,
 		}
 	}
 
 	/// Returns this value as a `bool`, if it is a boolean.
 	#[inline]
+	#[must_use]
 	pub const fn as_boolean(&self) -> Option<bool> {
 		match self {
 			Self::Boolean(b) => Some(*b),
-			_ => None,
+			Self::Null | Self::Number(_) | Self::String(_) | Self::Array(_) | Self::Object(_) => {
+				None
+			}
 		}
 	}
 
@@ -314,16 +346,21 @@ impl Value {
 	pub const fn as_boolean_mut(&mut self) -> Option<&mut bool> {
 		match self {
 			Self::Boolean(b) => Some(b),
-			_ => None,
+			Self::Null | Self::Number(_) | Self::String(_) | Self::Array(_) | Self::Object(_) => {
+				None
+			}
 		}
 	}
 
 	/// Returns this value as a [`Number`], if it is a number.
 	#[inline]
+	#[must_use]
 	pub fn as_number(&self) -> Option<&Number> {
 		match self {
 			Self::Number(n) => Some(n),
-			_ => None,
+			Self::Null | Self::Boolean(_) | Self::String(_) | Self::Array(_) | Self::Object(_) => {
+				None
+			}
 		}
 	}
 
@@ -333,21 +370,27 @@ impl Value {
 	pub const fn as_number_mut(&mut self) -> Option<&mut NumberBuf> {
 		match self {
 			Self::Number(n) => Some(n),
-			_ => None,
+			Self::Null | Self::Boolean(_) | Self::String(_) | Self::Array(_) | Self::Object(_) => {
+				None
+			}
 		}
 	}
 
 	/// Returns this value as a `&str`, if it is a string.
 	#[inline]
+	#[must_use]
 	pub fn as_string(&self) -> Option<&str> {
 		match self {
 			Self::String(s) => Some(s),
-			_ => None,
+			Self::Null | Self::Boolean(_) | Self::Number(_) | Self::Array(_) | Self::Object(_) => {
+				None
+			}
 		}
 	}
 
 	/// Alias for [`as_string`](Self::as_string).
 	#[inline]
+	#[must_use]
 	pub fn as_str(&self) -> Option<&str> {
 		self.as_string()
 	}
@@ -357,16 +400,21 @@ impl Value {
 	pub const fn as_string_mut(&mut self) -> Option<&mut String> {
 		match self {
 			Self::String(s) => Some(s),
-			_ => None,
+			Self::Null | Self::Boolean(_) | Self::Number(_) | Self::Array(_) | Self::Object(_) => {
+				None
+			}
 		}
 	}
 
 	/// Returns this value as a slice of values, if it is an array.
 	#[inline]
+	#[must_use]
 	pub fn as_array(&self) -> Option<&[Self]> {
 		match self {
 			Self::Array(a) => Some(a),
-			_ => None,
+			Self::Null | Self::Boolean(_) | Self::Number(_) | Self::String(_) | Self::Object(_) => {
+				None
+			}
 		}
 	}
 
@@ -375,7 +423,9 @@ impl Value {
 	pub const fn as_array_mut(&mut self) -> Option<&mut Array> {
 		match self {
 			Self::Array(a) => Some(a),
-			_ => None,
+			Self::Null | Self::Boolean(_) | Self::Number(_) | Self::String(_) | Self::Object(_) => {
+				None
+			}
 		}
 	}
 
@@ -384,19 +434,27 @@ impl Value {
 	/// Returns the input value as is if it is already an array,
 	/// or puts it in a slice with a single element if it is not.
 	#[inline]
+	#[must_use]
 	pub fn force_as_array(&self) -> &[Self] {
 		match self {
 			Self::Array(a) => a,
-			other => core::slice::from_ref(other),
+			other @ (Self::Null
+			| Self::Boolean(_)
+			| Self::Number(_)
+			| Self::String(_)
+			| Self::Object(_)) => slice::from_ref(other),
 		}
 	}
 
 	/// Returns this value as an [`Object`], if it is an object.
 	#[inline]
+	#[must_use]
 	pub const fn as_object(&self) -> Option<&Object> {
 		match self {
 			Self::Object(o) => Some(o),
-			_ => None,
+			Self::Null | Self::Boolean(_) | Self::Number(_) | Self::String(_) | Self::Array(_) => {
+				None
+			}
 		}
 	}
 
@@ -405,52 +463,69 @@ impl Value {
 	pub const fn as_object_mut(&mut self) -> Option<&mut Object> {
 		match self {
 			Self::Object(o) => Some(o),
-			_ => None,
+			Self::Null | Self::Boolean(_) | Self::Number(_) | Self::String(_) | Self::Array(_) => {
+				None
+			}
 		}
 	}
 
 	/// Consumes this value, returning the inner `bool` if it is a boolean.
 	#[inline]
+	#[must_use]
 	pub fn into_boolean(self) -> Option<bool> {
 		match self {
 			Self::Boolean(b) => Some(b),
-			_ => None,
+			Self::Null | Self::Number(_) | Self::String(_) | Self::Array(_) | Self::Object(_) => {
+				None
+			}
 		}
 	}
 
 	/// Consumes this value, returning the inner number if it is a number.
 	#[inline]
+	#[must_use]
 	pub fn into_number(self) -> Option<NumberBuf> {
 		match self {
 			Self::Number(n) => Some(n),
-			_ => None,
+			Self::Null | Self::Boolean(_) | Self::String(_) | Self::Array(_) | Self::Object(_) => {
+				None
+			}
 		}
 	}
 
 	/// Consumes this value, returning the inner string if it is a string.
 	#[inline]
+	#[must_use]
 	pub fn into_string(self) -> Option<String> {
 		match self {
 			Self::String(s) => Some(s),
-			_ => None,
+			Self::Null | Self::Boolean(_) | Self::Number(_) | Self::Array(_) | Self::Object(_) => {
+				None
+			}
 		}
 	}
 
 	/// Consumes this value, returning the inner array if it is an array.
 	#[inline]
+	#[must_use]
 	pub fn into_array(self) -> Option<Array> {
 		match self {
 			Self::Array(a) => Some(a),
-			_ => None,
+			Self::Null | Self::Boolean(_) | Self::Number(_) | Self::String(_) | Self::Object(_) => {
+				None
+			}
 		}
 	}
 
 	/// Consumes this value, returning the inner object if it is an object.
 	#[inline]
+	#[must_use]
 	pub fn into_object(self) -> Option<Object> {
 		match self {
 			Self::Object(o) => Some(o),
-			_ => None,
+			Self::Null | Self::Boolean(_) | Self::Number(_) | Self::String(_) | Self::Array(_) => {
+				None
+			}
 		}
 	}
 
@@ -459,6 +534,7 @@ impl Value {
 	///
 	/// The index of each fragment is its offset in the [`CodeMap`] produced
 	/// when the value was parsed.
+	#[must_use]
 	pub fn traverse(&self) -> Traverse<'_> {
 		let mut stack = SmallVec::new();
 		stack.push(FragmentRef::Value(self));
@@ -476,15 +552,17 @@ impl Value {
 	/// included in `self`, including `self` (the volume is at least `1`).
 	///
 	/// This is equivalent to `value.traverse().filter(|(_, f)| f.is_value()).count()`.
+	#[must_use]
 	pub fn volume(&self) -> usize {
 		self.traverse().filter(|(_, f)| f.is_value()).count()
 	}
 
 	/// Move and return the value, leaves `null` in its place.
 	#[inline(always)]
+	#[must_use]
 	pub const fn take(&mut self) -> Self {
 		let mut result = Self::Null;
-		std::mem::swap(&mut result, self);
+		mem::swap(&mut result, self);
 		result
 	}
 
@@ -498,11 +576,11 @@ impl Value {
 			Self::Number(n) => *n = NumberBuf::from_number(n.canonical_with(buffer)),
 			Self::Array(a) => {
 				for item in a {
-					item.canonicalize_with(buffer)
+					item.canonicalize_with(buffer);
 				}
 			}
 			Self::Object(o) => o.canonicalize_with(buffer),
-			_ => (),
+			Self::Null | Self::Boolean(_) | Self::String(_) => (),
 		}
 	}
 
@@ -513,14 +591,14 @@ impl Value {
 	/// [`Self::canonicalize_with`] with a caller-owned buffer.
 	#[cfg(feature = "canonicalize")]
 	pub fn canonicalize(&mut self) {
-		crate::with_canonicalize_buffer(|buf| self.canonicalize_with(buf))
+		crate::with_canonicalize_buffer(|buf| self.canonicalize_with(buf));
 	}
 }
 
 #[cfg(feature = "canonicalize")]
 thread_local! {
-	static CANONICALIZE_BUFFER: std::cell::RefCell<ryu_js::Buffer> =
-		std::cell::RefCell::new(ryu_js::Buffer::new());
+	static CANONICALIZE_BUFFER: RefCell<ryu_js::Buffer> =
+		RefCell::new(ryu_js::Buffer::new());
 }
 
 #[cfg(feature = "canonicalize")]
@@ -550,7 +628,7 @@ impl fmt::Display for Value {
 	}
 }
 
-impl From<Value> for ::std::string::String {
+impl From<Value> for StdString {
 	fn from(value: Value) -> Self {
 		value.to_string()
 	}
@@ -580,8 +658,8 @@ impl From<String> for Value {
 	}
 }
 
-impl From<::std::string::String> for Value {
-	fn from(s: ::std::string::String) -> Self {
+impl From<StdString> for Value {
+	fn from(s: StdString) -> Self {
 		Self::String(s.into())
 	}
 }
@@ -659,6 +737,7 @@ try_from_float! {
 /// A *fragment* is anything the parser assigns a source span to: a value, an
 /// object entry, or an object key. Fragments are what [`Value::traverse`]
 /// yields and what a [`CodeMap`] describes.
+#[derive(Clone, Copy)]
 pub enum FragmentRef<'a> {
 	/// A JSON value.
 	Value(&'a Value),
@@ -672,46 +751,55 @@ pub enum FragmentRef<'a> {
 
 impl<'a> FragmentRef<'a> {
 	/// Checks if this fragment is an object entry.
+	#[must_use]
 	pub const fn is_entry(&self) -> bool {
 		matches!(self, Self::Entry(_))
 	}
 
 	/// Checks if this fragment is an object key.
+	#[must_use]
 	pub const fn is_key(&self) -> bool {
 		matches!(self, Self::Key(_))
 	}
 
 	/// Checks if this fragment is a value.
+	#[must_use]
 	pub const fn is_value(&self) -> bool {
 		matches!(self, Self::Value(_))
 	}
 
 	/// Checks if this fragment is the `null` value.
+	#[must_use]
 	pub const fn is_null(&self) -> bool {
 		matches!(self, Self::Value(Value::Null))
 	}
 
 	/// Checks if this fragment is a number value.
+	#[must_use]
 	pub const fn is_number(&self) -> bool {
 		matches!(self, Self::Value(Value::Number(_)))
 	}
 
 	/// Checks if this fragment is a string value.
+	#[must_use]
 	pub const fn is_string(&self) -> bool {
 		matches!(self, Self::Value(Value::String(_)))
 	}
 
 	/// Checks if this fragment is an array value.
+	#[must_use]
 	pub const fn is_array(&self) -> bool {
 		matches!(self, Self::Value(Value::Array(_)))
 	}
 
 	/// Checks if this fragment is an object value.
+	#[must_use]
 	pub const fn is_object(&self) -> bool {
 		matches!(self, Self::Value(Value::Object(_)))
 	}
 
 	/// Returns this fragment reference unchanged.
+	#[must_use]
 	pub const fn strip(self) -> FragmentRef<'a> {
 		match self {
 			Self::Value(v) => FragmentRef::Value(v),
@@ -721,22 +809,16 @@ impl<'a> FragmentRef<'a> {
 	}
 }
 
-impl<'a> Clone for FragmentRef<'a> {
-	fn clone(&self) -> Self {
-		*self
-	}
-}
-
-impl<'a> Copy for FragmentRef<'a> {}
-
 impl<'a> FragmentRef<'a> {
 	/// Returns an iterator over the direct sub-fragments of this fragment.
+	#[must_use]
 	pub fn sub_fragments(&self) -> SubFragments<'a> {
 		match self {
 			Self::Value(Value::Array(a)) => SubFragments::Array(a.iter()),
 			Self::Value(Value::Object(o)) => SubFragments::Object(o.iter()),
 			Self::Entry(e) => SubFragments::Entry(Some(&e.key), Some(&e.value)),
-			_ => SubFragments::None,
+			Self::Value(Value::Null | Value::Boolean(_) | Value::Number(_) | Value::String(_))
+			| Self::Key(_) => SubFragments::None,
 		}
 	}
 }
@@ -747,10 +829,10 @@ pub enum SubFragments<'a> {
 	None,
 
 	/// Sub-fragments of an array: its items.
-	Array(core::slice::Iter<'a, Value>),
+	Array(slice::Iter<'a, Value>),
 
 	/// Sub-fragments of an object: its entries.
-	Object(core::slice::Iter<'a, object::Entry>),
+	Object(slice::Iter<'a, object::Entry>),
 
 	/// Sub-fragments of an object entry: its key, then its value.
 	Entry(Option<&'a object::Key>, Option<&'a Value>),
@@ -772,7 +854,7 @@ impl<'a> Iterator for SubFragments<'a> {
 	}
 }
 
-impl<'a> DoubleEndedIterator for SubFragments<'a> {
+impl DoubleEndedIterator for SubFragments<'_> {
 	fn next_back(&mut self) -> Option<Self::Item> {
 		match self {
 			Self::None => None,
@@ -817,7 +899,7 @@ mod tests {
 	fn canonicalize_01() {
 		use super::*;
 		let mut value: Value = json!({
-			"b": 0.00000000001,
+			"b": 0.000_000_000_01,
 			"c": {
 				"foo": true,
 				"bar": false
@@ -830,7 +912,7 @@ mod tests {
 		assert_eq!(
 			value.compact_print().to_string(),
 			"{\"a\":[\"foo\",\"bar\"],\"b\":1e-11,\"c\":{\"bar\":false,\"foo\":true}}"
-		)
+		);
 	}
 
 	#[cfg(feature = "canonicalize")]
@@ -851,6 +933,6 @@ mod tests {
 		assert_eq!(
 			value.compact_print().to_string(),
 			"{\"literals\":[null,true,false],\"numbers\":[333333333.3333333,1e+30,4.5,0.002,1e-27],\"string\":\"€$\\u000f\\nA'B\\\"\\\\\\\\\\\"/\"}"
-		)
+		);
 	}
 }

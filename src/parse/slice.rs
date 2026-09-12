@@ -13,10 +13,13 @@
 //! [`CodeMap`] pay for it, and callers that don't get a no-op trait method
 //! that monomorphises away.
 
+use crate::byte_scan::{find_escape, find_lt_0x20};
 use crate::{
 	Array, CodeMap, NumberBuf, Object, String as JsonString, Value, object::Key, parse::Options,
 };
+use core::str;
 use locspan::Span;
+use simdutf8::basic;
 
 use super::Error;
 
@@ -50,7 +53,9 @@ impl Mapper for Recording {
 	#[inline]
 	fn end_fragment(&mut self, idx: usize, end_pos: usize) {
 		let entry_count = self.code_map.len();
-		let entry = self.code_map.get_mut(idx).unwrap();
+		let Some(entry) = self.code_map.get_mut(idx) else {
+			return;
+		};
 		entry.span.end = end_pos;
 		entry.volume = entry_count - idx;
 	}
@@ -129,7 +134,7 @@ pub(crate) fn parse_value_slice_with<M: Mapper>(
 	mapper: M,
 ) -> Result<(Value, M), Error> {
 	#[cfg(feature = "simdutf8")]
-	let s = simdutf8::basic::from_utf8(input).map_err(|_| Error::InvalidUtf8(0))?;
+	let s = basic::from_utf8(input).map_err(|_| Error::InvalidUtf8(0))?;
 	#[cfg(not(feature = "simdutf8"))]
 	let s = core::str::from_utf8(input).map_err(|e| Error::InvalidUtf8(e.valid_up_to()))?;
 	parse_value_str_with(s, options, mapper)
@@ -172,7 +177,7 @@ impl<'a, M: Mapper> SliceParser<'a, M> {
 		if byte_pos >= self.input.len() {
 			return None;
 		}
-		match core::str::from_utf8(&self.input[byte_pos..]) {
+		match str::from_utf8(&self.input[byte_pos..]) {
 			Ok(s) => s.chars().next(),
 			Err(_) => Some(self.input[byte_pos] as char),
 		}
@@ -199,10 +204,10 @@ impl<'a, M: Mapper> SliceParser<'a, M> {
 	}
 
 	#[inline]
-	fn validate_str_slice(&self, start: usize, end: usize) -> Result<&'a str, Error> {
+	fn validate_str_slice(&self, start: usize, end: usize) -> &'a str {
 		// SAFETY: input is validated as UTF-8 upfront for slice entry points,
 		// or comes from a `&str` directly.
-		Ok(unsafe { core::str::from_utf8_unchecked(&self.input[start..end]) })
+		unsafe { str::from_utf8_unchecked(&self.input[start..end]) }
 	}
 
 	fn parse_string(&mut self) -> Result<JsonString, Error> {
@@ -213,11 +218,11 @@ impl<'a, M: Mapper> SliceParser<'a, M> {
 		match memchr::memchr2(b'"', b'\\', &bytes[start..]) {
 			Some(off) => {
 				let end = start + off;
-				if let Some(bad) = crate::byte_scan::find_lt_0x20(&bytes[start..end]) {
+				if let Some(bad) = find_lt_0x20(&bytes[start..end]) {
 					return Err(self.unexpected_at(start + bad));
 				}
 				if bytes[end] == b'"' {
-					let s = self.validate_str_slice(start, end)?;
+					let s = self.validate_str_slice(start, end);
 					let out = JsonString::new(s);
 					self.pos = end + 1;
 					Ok(out)
@@ -241,7 +246,7 @@ impl<'a, M: Mapper> SliceParser<'a, M> {
 		// and copies a long one once.
 		let mut out = String::new();
 		if first_escape > start {
-			let prefix = self.validate_str_slice(start, first_escape)?;
+			let prefix = self.validate_str_slice(start, first_escape);
 			out.push_str(prefix);
 		}
 		self.pos = first_escape;
@@ -250,23 +255,19 @@ impl<'a, M: Mapper> SliceParser<'a, M> {
 		loop {
 			let run_start = self.pos;
 			let bytes = self.input;
-			let (j, hit): (usize, Option<u8>) =
-				match crate::byte_scan::find_escape(&bytes[run_start..]) {
-					Some(off) => (run_start + off, Some(bytes[run_start + off])),
-					None => (bytes.len(), None),
-				};
+			let (j, hit): (usize, Option<u8>) = match find_escape(&bytes[run_start..]) {
+				Some(off) => (run_start + off, Some(bytes[run_start + off])),
+				None => (bytes.len(), None),
+			};
 			if j > run_start {
 				if let Some((p_high, high)) = high_surrogate.take() {
 					if self.options.accept_truncated_surrogate_pair {
 						out.push('\u{fffd}');
 					} else {
-						return Err(Error::MissingLowSurrogate(
-							Span::new(p_high, j),
-							high as u16,
-						));
+						return Err(Error::MissingLowSurrogate(Span::new(p_high, j), high));
 					}
 				}
-				let run = self.validate_str_slice(run_start, j)?;
+				let run = self.validate_str_slice(run_start, j);
 				out.push_str(run);
 				self.pos = j;
 			}
@@ -278,7 +279,7 @@ impl<'a, M: Mapper> SliceParser<'a, M> {
 						} else {
 							return Err(Error::MissingLowSurrogate(
 								Span::new(p_high, self.pos),
-								high as u16,
+								high,
 							));
 						}
 					}
@@ -297,86 +298,7 @@ impl<'a, M: Mapper> SliceParser<'a, M> {
 						b'n' => out.push('\u{000a}'),
 						b'f' => out.push('\u{000c}'),
 						b'r' => out.push('\u{000d}'),
-						b'u' => {
-							let codepoint = self.parse_hex4()?;
-							let p_u = esc_pos;
-							let decoded = match high_surrogate.take() {
-								Some((p_high, high)) => {
-									if (0xdc00..=0xdfff).contains(&codepoint) {
-										let low = codepoint;
-										let cp =
-											((high - 0xd800) << 10 | (low - 0xdc00)) + 0x010000;
-										match char::from_u32(cp) {
-											Some(c) => Some(c),
-											None => {
-												if self.options.accept_invalid_codepoints {
-													Some('\u{fffd}')
-												} else {
-													return Err(Error::InvalidUnicodeCodePoint(
-														Span::new(p_high, self.pos),
-														cp,
-													));
-												}
-											}
-										}
-									} else if self.options.accept_truncated_surrogate_pair {
-										out.push('\u{fffd}');
-										match char::from_u32(codepoint) {
-											Some(c) => Some(c),
-											None => {
-												if self.options.accept_invalid_codepoints {
-													Some('\u{fffd}')
-												} else {
-													return Err(Error::InvalidUnicodeCodePoint(
-														Span::new(p_u, self.pos),
-														codepoint,
-													));
-												}
-											}
-										}
-									} else {
-										return Err(Error::InvalidLowSurrogate(
-											Span::new(p_u, self.pos),
-											high as u16,
-											codepoint,
-										));
-									}
-								}
-								None => {
-									if (0xd800..=0xdbff).contains(&codepoint) {
-										high_surrogate = Some((p_u, codepoint));
-										None
-									} else {
-										match char::from_u32(codepoint) {
-											Some(c) => Some(c),
-											None => {
-												if self.options.accept_invalid_codepoints {
-													Some('\u{fffd}')
-												} else {
-													return Err(Error::InvalidUnicodeCodePoint(
-														Span::new(p_u, self.pos),
-														codepoint,
-													));
-												}
-											}
-										}
-									}
-								}
-							};
-							if let Some(c) = decoded {
-								if let Some((p_high, high)) = high_surrogate.take() {
-									if self.options.accept_truncated_surrogate_pair {
-										out.push('\u{fffd}');
-									} else {
-										return Err(Error::MissingLowSurrogate(
-											Span::new(p_high, self.pos),
-											high as u16,
-										));
-									}
-								}
-								out.push(c);
-							}
-						}
+						b'u' => self.push_unicode_escape(&mut out, &mut high_surrogate, esc_pos)?,
 						_ => return Err(Error::Unexpected(esc_pos, Some(esc as char))),
 					}
 				}
@@ -386,14 +308,102 @@ impl<'a, M: Mapper> SliceParser<'a, M> {
 		}
 	}
 
+	/// Decodes a single `\u` escape (surrogate pairs included) and pushes the
+	/// resulting character onto `out`, tracking a pending high surrogate.
+	fn push_unicode_escape(
+		&mut self,
+		out: &mut String,
+		high_surrogate: &mut Option<(usize, u32)>,
+		esc_pos: usize,
+	) -> Result<(), Error> {
+		let codepoint = self.parse_hex4()?;
+		let p_u = esc_pos;
+		let decoded = match high_surrogate.take() {
+			Some((p_high, high)) => {
+				if (0xdc00..=0xdfff).contains(&codepoint) {
+					let low = codepoint;
+					let cp = ((high - 0xd800) << 10 | (low - 0xdc00)) + 0x01_0000;
+					match char::from_u32(cp) {
+						Some(c) => Some(c),
+						None => {
+							if self.options.accept_invalid_codepoints {
+								Some('\u{fffd}')
+							} else {
+								return Err(Error::InvalidUnicodeCodePoint(
+									Span::new(p_high, self.pos),
+									cp,
+								));
+							}
+						}
+					}
+				} else if self.options.accept_truncated_surrogate_pair {
+					out.push('\u{fffd}');
+					match char::from_u32(codepoint) {
+						Some(c) => Some(c),
+						None => {
+							if self.options.accept_invalid_codepoints {
+								Some('\u{fffd}')
+							} else {
+								return Err(Error::InvalidUnicodeCodePoint(
+									Span::new(p_u, self.pos),
+									codepoint,
+								));
+							}
+						}
+					}
+				} else {
+					return Err(Error::InvalidLowSurrogate(
+						Span::new(p_u, self.pos),
+						high,
+						codepoint,
+					));
+				}
+			}
+			None => {
+				if (0xd800..=0xdbff).contains(&codepoint) {
+					*high_surrogate = Some((p_u, codepoint));
+					None
+				} else {
+					match char::from_u32(codepoint) {
+						Some(c) => Some(c),
+						None => {
+							if self.options.accept_invalid_codepoints {
+								Some('\u{fffd}')
+							} else {
+								return Err(Error::InvalidUnicodeCodePoint(
+									Span::new(p_u, self.pos),
+									codepoint,
+								));
+							}
+						}
+					}
+				}
+			}
+		};
+		if let Some(c) = decoded {
+			if let Some((p_high, high)) = high_surrogate.take() {
+				if self.options.accept_truncated_surrogate_pair {
+					out.push('\u{fffd}');
+				} else {
+					return Err(Error::MissingLowSurrogate(
+						Span::new(p_high, self.pos),
+						high,
+					));
+				}
+			}
+			out.push(c);
+		}
+		Ok(())
+	}
+
 	fn parse_hex4(&mut self) -> Result<u32, Error> {
 		let mut acc = 0u32;
 		for _ in 0..4 {
 			let (p, b) = self.next_byte()?;
 			let d = match b {
-				b'0'..=b'9' => (b - b'0') as u32,
-				b'a'..=b'f' => (b - b'a' + 10) as u32,
-				b'A'..=b'F' => (b - b'A' + 10) as u32,
+				b'0'..=b'9' => u32::from(b - b'0'),
+				b'a'..=b'f' => u32::from(b - b'a' + 10),
+				b'A'..=b'F' => u32::from(b - b'A' + 10),
 				_ => return Err(Error::Unexpected(p, Some(b as char))),
 			};
 			acc = (acc << 4) | d;
@@ -423,7 +433,7 @@ impl<'a, M: Mapper> SliceParser<'a, M> {
 			}
 			_ => return Err(Error::Unexpected(i, self.char_at(i))),
 		}
-		if matches!(bytes.get(i), Some(&b'.') | Some(&b'e') | Some(&b'E')) {
+		if matches!(bytes.get(i), Some(&b'.' | &b'e' | &b'E')) {
 			return self.parse_number_slow(ctx, start);
 		}
 		let term_ok = match bytes.get(i) {
@@ -441,9 +451,6 @@ impl<'a, M: Mapper> SliceParser<'a, M> {
 	}
 
 	fn parse_number_slow(&mut self, ctx: super::Context, start: usize) -> Result<NumberBuf, Error> {
-		let bytes = self.input;
-		let mut i = start;
-
 		enum State {
 			Init,
 			FirstDigit,
@@ -456,6 +463,8 @@ impl<'a, M: Mapper> SliceParser<'a, M> {
 			ExponentRest,
 		}
 
+		let bytes = self.input;
+		let mut i = start;
 		let mut state = State::Init;
 		while i < bytes.len() {
 			let b = bytes[i];
@@ -516,15 +525,16 @@ impl<'a, M: Mapper> SliceParser<'a, M> {
 					b'0'..=b'9' => state = State::ExponentRest,
 					_ => return Err(Error::Unexpected(i, Some(c))),
 				},
-				State::ExponentRest => match b {
-					b'0'..=b'9' => state = State::ExponentRest,
-					_ => {
+				State::ExponentRest => {
+					if let b'0'..=b'9' = b {
+						state = State::ExponentRest;
+					} else {
 						if ctx.follows(c) {
 							break;
 						}
 						return Err(Error::Unexpected(i, Some(c)));
 					}
-				},
+				}
 			}
 			i += 1;
 		}
@@ -629,6 +639,99 @@ impl<'a, M: Mapper> SliceParser<'a, M> {
 		}
 	}
 
+	fn step_array_item(
+		&mut self,
+		stack: &mut Vec<StackItem>,
+		value: &mut Option<Value>,
+		mut array: Array,
+		frag: usize,
+	) -> Result<(), Error> {
+		let v = match value.take() {
+			Some(v) => v,
+			None => match self.begin(super::Context::Array)? {
+				Begin::Value(v) => v,
+				Begin::ArrayItem { frag: f2 } => {
+					stack.push(StackItem::ArrayItem { array, frag });
+					stack.push(StackItem::ArrayItem {
+						array: Array::new(),
+						frag: f2,
+					});
+					return Ok(());
+				}
+				Begin::ObjectEntry {
+					frag: f2,
+					key: k2,
+					entry_frag: e2,
+				} => {
+					stack.push(StackItem::ArrayItem { array, frag });
+					stack.push(StackItem::ObjectEntry {
+						object: Object::new(),
+						frag: f2,
+						key: k2,
+						entry_frag: e2,
+					});
+					return Ok(());
+				}
+			},
+		};
+		array.push(v);
+		stack.push(StackItem::Array { array, frag });
+		Ok(())
+	}
+
+	fn step_object_entry(
+		&mut self,
+		stack: &mut Vec<StackItem>,
+		value: &mut Option<Value>,
+		mut object: Object,
+		frag: usize,
+		key: Key,
+		entry_frag: usize,
+	) -> Result<(), Error> {
+		let v = match value.take() {
+			Some(v) => v,
+			None => match self.begin(super::Context::ObjectValue)? {
+				Begin::Value(v) => v,
+				Begin::ArrayItem { frag: f2 } => {
+					stack.push(StackItem::ObjectEntry {
+						object,
+						frag,
+						key,
+						entry_frag,
+					});
+					stack.push(StackItem::ArrayItem {
+						array: Array::new(),
+						frag: f2,
+					});
+					return Ok(());
+				}
+				Begin::ObjectEntry {
+					frag: f2,
+					key: k2,
+					entry_frag: e2,
+				} => {
+					stack.push(StackItem::ObjectEntry {
+						object,
+						frag,
+						key,
+						entry_frag,
+					});
+					stack.push(StackItem::ObjectEntry {
+						object: Object::new(),
+						frag: f2,
+						key: k2,
+						entry_frag: e2,
+					});
+					return Ok(());
+				}
+			},
+		};
+		self.mapper.end_fragment(entry_frag, self.pos);
+		object.push(key, v);
+		stack.push(StackItem::Object { object, frag });
+		Ok(())
+	}
+
 	fn parse_root(&mut self) -> Result<Value, Error> {
 		let mut stack: Vec<StackItem> = Vec::with_capacity(8);
 		let mut value: Option<Value> = None;
@@ -672,37 +775,8 @@ impl<'a, M: Mapper> SliceParser<'a, M> {
 						(p, b) => return Err(Error::Unexpected(p, Some(b as char))),
 					}
 				}
-				Some(StackItem::ArrayItem { mut array, frag }) => {
-					let v = match value.take() {
-						Some(v) => v,
-						None => match self.begin(super::Context::Array)? {
-							Begin::Value(v) => v,
-							Begin::ArrayItem { frag: f2 } => {
-								stack.push(StackItem::ArrayItem { array, frag });
-								stack.push(StackItem::ArrayItem {
-									array: Array::new(),
-									frag: f2,
-								});
-								continue;
-							}
-							Begin::ObjectEntry {
-								frag: f2,
-								key: k2,
-								entry_frag: e2,
-							} => {
-								stack.push(StackItem::ArrayItem { array, frag });
-								stack.push(StackItem::ObjectEntry {
-									object: Object::new(),
-									frag: f2,
-									key: k2,
-									entry_frag: e2,
-								});
-								continue;
-							}
-						},
-					};
-					array.push(v);
-					stack.push(StackItem::Array { array, frag });
+				Some(StackItem::ArrayItem { array, frag }) => {
+					self.step_array_item(&mut stack, &mut value, array, frag)?;
 				}
 				Some(StackItem::Object { object, frag }) => {
 					self.skip_whitespace();
@@ -725,52 +799,12 @@ impl<'a, M: Mapper> SliceParser<'a, M> {
 					}
 				}
 				Some(StackItem::ObjectEntry {
-					mut object,
+					object,
 					frag,
 					key,
 					entry_frag,
 				}) => {
-					let v = match value.take() {
-						Some(v) => v,
-						None => match self.begin(super::Context::ObjectValue)? {
-							Begin::Value(v) => v,
-							Begin::ArrayItem { frag: f2 } => {
-								stack.push(StackItem::ObjectEntry {
-									object,
-									frag,
-									key,
-									entry_frag,
-								});
-								stack.push(StackItem::ArrayItem {
-									array: Array::new(),
-									frag: f2,
-								});
-								continue;
-							}
-							Begin::ObjectEntry {
-								frag: f2,
-								key: k2,
-								entry_frag: e2,
-							} => {
-								stack.push(StackItem::ObjectEntry {
-									object,
-									frag,
-									key,
-									entry_frag,
-								});
-								stack.push(StackItem::ObjectEntry {
-									object: Object::new(),
-									frag: f2,
-									key: k2,
-									entry_frag: e2,
-								});
-								continue;
-							}
-						},
-					};
-					self.mapper.end_fragment(entry_frag, self.pos);
-					object.push(key, v);
-					stack.push(StackItem::Object { object, frag });
+					self.step_object_entry(&mut stack, &mut value, object, frag, key, entry_frag)?;
 				}
 			}
 		}

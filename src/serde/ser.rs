@@ -1,5 +1,9 @@
 use compact_str::CompactString;
-use serde::{Serialize, ser::Impossible};
+use serde::{
+	Serialize,
+	ser::{self, Impossible},
+};
+use std::error::Error as StdError;
 use std::fmt;
 
 use super::NUMBER_TOKEN;
@@ -16,11 +20,11 @@ impl Serialize for Value {
 			Self::Number(n) => n.serialize(serializer),
 			Self::String(s) => serializer.serialize_str(s),
 			Self::Array(a) => {
-				use serde::ser::SerializeSeq;
+				use ser::SerializeSeq;
 				let mut seq = serializer.serialize_seq(Some(a.len()))?;
 
 				for item in a {
-					seq.serialize_element(item)?
+					seq.serialize_element(item)?;
 				}
 
 				seq.end()
@@ -35,7 +39,7 @@ impl Serialize for Object {
 	where
 		S: serde::Serializer,
 	{
-		use serde::ser::SerializeMap;
+		use ser::SerializeMap;
 		let mut map = serializer.serialize_map(Some(self.len()))?;
 
 		for entry in self {
@@ -69,9 +73,9 @@ impl fmt::Display for SerializeError {
 	}
 }
 
-impl std::error::Error for SerializeError {}
+impl StdError for SerializeError {}
 
-impl serde::ser::Error for SerializeError {
+impl ser::Error for SerializeError {
 	fn custom<T>(msg: T) -> Self
 	where
 		T: fmt::Display,
@@ -102,17 +106,17 @@ impl serde::Serializer for Serializer {
 
 	#[inline(always)]
 	fn serialize_i8(self, v: i8) -> Result<Self::Ok, Self::Error> {
-		self.serialize_i64(v as i64)
+		self.serialize_i64(i64::from(v))
 	}
 
 	#[inline(always)]
 	fn serialize_i16(self, v: i16) -> Result<Self::Ok, Self::Error> {
-		self.serialize_i64(v as i64)
+		self.serialize_i64(i64::from(v))
 	}
 
 	#[inline(always)]
 	fn serialize_i32(self, v: i32) -> Result<Self::Ok, Self::Error> {
-		self.serialize_i64(v as i64)
+		self.serialize_i64(i64::from(v))
 	}
 
 	#[inline(always)]
@@ -122,17 +126,17 @@ impl serde::Serializer for Serializer {
 
 	#[inline(always)]
 	fn serialize_u8(self, v: u8) -> Result<Self::Ok, Self::Error> {
-		self.serialize_u64(v as u64)
+		self.serialize_u64(u64::from(v))
 	}
 
 	#[inline(always)]
 	fn serialize_u16(self, v: u16) -> Result<Self::Ok, Self::Error> {
-		self.serialize_u64(v as u64)
+		self.serialize_u64(u64::from(v))
 	}
 
 	#[inline(always)]
 	fn serialize_u32(self, v: u32) -> Result<Self::Ok, Self::Error> {
-		self.serialize_u64(v as u64)
+		self.serialize_u64(u64::from(v))
 	}
 
 	#[inline(always)]
@@ -309,13 +313,13 @@ impl serde::Serializer for StringNumberSerializer {
 	type Ok = NumberBuf;
 	type Error = SerializeError;
 
-	type SerializeSeq = serde::ser::Impossible<Self::Ok, Self::Error>;
-	type SerializeTuple = serde::ser::Impossible<Self::Ok, Self::Error>;
-	type SerializeTupleStruct = serde::ser::Impossible<Self::Ok, Self::Error>;
-	type SerializeTupleVariant = serde::ser::Impossible<Self::Ok, Self::Error>;
-	type SerializeMap = serde::ser::Impossible<Self::Ok, Self::Error>;
-	type SerializeStruct = serde::ser::Impossible<Self::Ok, Self::Error>;
-	type SerializeStructVariant = serde::ser::Impossible<Self::Ok, Self::Error>;
+	type SerializeSeq = ser::Impossible<Self::Ok, Self::Error>;
+	type SerializeTuple = ser::Impossible<Self::Ok, Self::Error>;
+	type SerializeTupleStruct = ser::Impossible<Self::Ok, Self::Error>;
+	type SerializeTupleVariant = ser::Impossible<Self::Ok, Self::Error>;
+	type SerializeMap = ser::Impossible<Self::Ok, Self::Error>;
+	type SerializeStruct = ser::Impossible<Self::Ok, Self::Error>;
+	type SerializeStructVariant = ser::Impossible<Self::Ok, Self::Error>;
 
 	fn serialize_bool(self, _v: bool) -> Result<Self::Ok, Self::Error> {
 		Err(SerializeError::MalformedHighPrecisionNumber)
@@ -668,7 +672,7 @@ pub struct SerializeArray {
 	array: Array,
 }
 
-impl serde::ser::SerializeSeq for SerializeArray {
+impl ser::SerializeSeq for SerializeArray {
 	type Ok = Value;
 	type Error = SerializeError;
 
@@ -685,7 +689,7 @@ impl serde::ser::SerializeSeq for SerializeArray {
 	}
 }
 
-impl serde::ser::SerializeTuple for SerializeArray {
+impl ser::SerializeTuple for SerializeArray {
 	type Ok = Value;
 	type Error = SerializeError;
 
@@ -693,15 +697,15 @@ impl serde::ser::SerializeTuple for SerializeArray {
 	where
 		T: ?Sized + Serialize,
 	{
-		serde::ser::SerializeSeq::serialize_element(self, value)
+		ser::SerializeSeq::serialize_element(self, value)
 	}
 
 	fn end(self) -> Result<Self::Ok, Self::Error> {
-		serde::ser::SerializeSeq::end(self)
+		ser::SerializeSeq::end(self)
 	}
 }
 
-impl serde::ser::SerializeTupleStruct for SerializeArray {
+impl ser::SerializeTupleStruct for SerializeArray {
 	type Ok = Value;
 	type Error = SerializeError;
 
@@ -709,11 +713,11 @@ impl serde::ser::SerializeTupleStruct for SerializeArray {
 	where
 		T: ?Sized + Serialize,
 	{
-		serde::ser::SerializeSeq::serialize_element(self, value)
+		ser::SerializeSeq::serialize_element(self, value)
 	}
 
 	fn end(self) -> Result<Self::Ok, Self::Error> {
-		serde::ser::SerializeSeq::end(self)
+		ser::SerializeSeq::end(self)
 	}
 }
 
@@ -724,7 +728,7 @@ pub struct SerializeTupleVariant {
 	array: Array,
 }
 
-impl serde::ser::SerializeTupleVariant for SerializeTupleVariant {
+impl ser::SerializeTupleVariant for SerializeTupleVariant {
 	type Ok = Value;
 	type Error = SerializeError;
 
@@ -751,7 +755,7 @@ pub struct SerializeStructVariant {
 	obj: Object,
 }
 
-impl serde::ser::SerializeStructVariant for SerializeStructVariant {
+impl ser::SerializeStructVariant for SerializeStructVariant {
 	type Ok = Value;
 	type Error = SerializeError;
 
@@ -788,7 +792,7 @@ pub enum SerializeMap {
 	Number(Option<NumberBuf>),
 }
 
-impl serde::ser::SerializeMap for SerializeMap {
+impl ser::SerializeMap for SerializeMap {
 	type Ok = Value;
 	type Error = SerializeError;
 
@@ -802,7 +806,7 @@ impl serde::ser::SerializeMap for SerializeMap {
 				let key = key.serialize(KeySerializer)?;
 
 				if obj.is_empty() && key == NUMBER_TOKEN {
-					*self = Self::Number(None)
+					*self = Self::Number(None);
 				} else {
 					*next_key = Some(key);
 				}
@@ -822,9 +826,11 @@ impl serde::ser::SerializeMap for SerializeMap {
 				Ok(())
 			}
 			Self::Object { obj, next_key } => {
-				let key = next_key
-					.take()
-					.expect("serialize_value called before serialize_key");
+				let Some(key) = next_key.take() else {
+					return Err(ser::Error::custom(
+						"serialize_value called before serialize_key",
+					));
+				};
 				obj.insert(key, value.serialize(Serializer)?);
 				Ok(())
 			}
@@ -840,7 +846,7 @@ impl serde::ser::SerializeMap for SerializeMap {
 	}
 }
 
-impl serde::ser::SerializeStruct for SerializeMap {
+impl ser::SerializeStruct for SerializeMap {
 	type Ok = Value;
 	type Error = SerializeError;
 
@@ -848,10 +854,10 @@ impl serde::ser::SerializeStruct for SerializeMap {
 	where
 		T: ?Sized + Serialize,
 	{
-		serde::ser::SerializeMap::serialize_entry(self, key, value)
+		ser::SerializeMap::serialize_entry(self, key, value)
 	}
 
 	fn end(self) -> Result<Self::Ok, Self::Error> {
-		serde::ser::SerializeMap::end(self)
+		ser::SerializeMap::end(self)
 	}
 }

@@ -6,6 +6,7 @@
 //! namespace, a vocabulary, …) can be printed as JSON. Wrapping such a value
 //! in `contextual::Contextual` gives back the plain print traits.
 use contextual::{Contextual, WithContext};
+use core::hash::BuildHasher;
 use std::collections::HashSet;
 use std::fmt;
 
@@ -14,6 +15,9 @@ use super::{Options, Size};
 /// [`Print`](super::Print) with an additional context.
 pub trait PrintWithContext<C> {
 	/// Writes the value to `f`, resolving it against `context`.
+	/// # Errors
+	///
+	/// Returns [`fmt::Error`] if writing to the formatter fails.
 	fn contextual_fmt_with(
 		&self,
 		context: &C,
@@ -45,27 +49,30 @@ impl<T: PrintWithContext<C>, C> super::Print for Contextual<T, &C> {
 pub trait PrintWithSizeAndContext<C> {
 	/// Writes the value to `f` against `context`, taking its layout from
 	/// `sizes[*index]`.
+	/// # Errors
+	///
+	/// Returns [`fmt::Error`] if writing to the formatter fails.
 	fn contextual_fmt_with_size(
 		&self,
 		context: &C,
-		f: &mut std::fmt::Formatter,
+		f: &mut fmt::Formatter,
 		options: &Options,
 		indent: usize,
 		sizes: &[Size],
 		index: &mut usize,
-	) -> std::fmt::Result;
+	) -> fmt::Result;
 }
 
 impl<T: PrintWithSizeAndContext<C> + ?Sized, C> PrintWithSizeAndContext<C> for &T {
 	fn contextual_fmt_with_size(
 		&self,
 		context: &C,
-		f: &mut std::fmt::Formatter,
+		f: &mut fmt::Formatter,
 		options: &Options,
 		indent: usize,
 		sizes: &[Size],
 		index: &mut usize,
-	) -> std::fmt::Result {
+	) -> fmt::Result {
 		T::contextual_fmt_with_size(*self, context, f, options, indent, sizes, index)
 	}
 }
@@ -73,12 +80,12 @@ impl<T: PrintWithSizeAndContext<C> + ?Sized, C> PrintWithSizeAndContext<C> for &
 impl<T: PrintWithSizeAndContext<C>, C> super::PrintWithSize for Contextual<T, &C> {
 	fn fmt_with_size(
 		&self,
-		f: &mut std::fmt::Formatter,
+		f: &mut fmt::Formatter,
 		options: &Options,
 		indent: usize,
 		sizes: &[Size],
 		index: &mut usize,
-	) -> std::fmt::Result {
+	) -> fmt::Result {
 		self.0
 			.contextual_fmt_with_size(self.1, f, options, indent, sizes, index)
 	}
@@ -127,12 +134,12 @@ impl<T: PrintWithSizeAndContext<C>, C> PrintWithSizeAndContext<C> for [T] {
 	fn contextual_fmt_with_size(
 		&self,
 		context: &C,
-		f: &mut std::fmt::Formatter,
+		f: &mut fmt::Formatter,
 		options: &Options,
 		indent: usize,
 		sizes: &[Size],
 		index: &mut usize,
-	) -> std::fmt::Result {
+	) -> fmt::Result {
 		super::print_array(
 			self.iter().map(|i| i.with(context)),
 			f,
@@ -144,7 +151,9 @@ impl<T: PrintWithSizeAndContext<C>, C> PrintWithSizeAndContext<C> for [T] {
 	}
 }
 
-impl<T: PrecomputeSizeWithContext<C>, C> PrecomputeSizeWithContext<C> for HashSet<T> {
+impl<T: PrecomputeSizeWithContext<C>, C, S: BuildHasher> PrecomputeSizeWithContext<C>
+	for HashSet<T, S>
+{
 	fn contextual_pre_compute_size(
 		&self,
 		context: &C,
@@ -155,16 +164,18 @@ impl<T: PrecomputeSizeWithContext<C>, C> PrecomputeSizeWithContext<C> for HashSe
 	}
 }
 
-impl<T: PrintWithSizeAndContext<C>, C> PrintWithSizeAndContext<C> for HashSet<T> {
+impl<T: PrintWithSizeAndContext<C>, C, S: BuildHasher> PrintWithSizeAndContext<C>
+	for HashSet<T, S>
+{
 	fn contextual_fmt_with_size(
 		&self,
 		context: &C,
-		f: &mut std::fmt::Formatter,
+		f: &mut fmt::Formatter,
 		options: &Options,
 		indent: usize,
 		sizes: &[Size],
 		index: &mut usize,
-	) -> std::fmt::Result {
+	) -> fmt::Result {
 		super::print_array(
 			self.iter().map(|i| i.with(context)),
 			f,

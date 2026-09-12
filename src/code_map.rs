@@ -9,6 +9,10 @@
 //!
 //! [`Value::traverse`]: crate::Value::traverse
 use core::fmt;
+use std::error::Error as StdError;
+use std::iter::Enumerate;
+use std::slice;
+use std::vec;
 use std::{borrow::Borrow, ops::Deref};
 
 use locspan::Span;
@@ -22,6 +26,7 @@ pub struct CodeMap(Vec<Entry>);
 
 impl CodeMap {
 	/// Returns the entries of this code map as a slice, in fragment order.
+	#[must_use]
 	pub fn as_slice(&self) -> &[Entry] {
 		&self.0
 	}
@@ -67,10 +72,10 @@ impl Borrow<[Entry]> for CodeMap {
 }
 
 /// Borrowing iterator over the entries of a [`CodeMap`], with their index.
-pub type Iter<'a> = std::iter::Enumerate<std::slice::Iter<'a, Entry>>;
+pub type Iter<'a> = Enumerate<slice::Iter<'a, Entry>>;
 
 /// Consuming iterator over the entries of a [`CodeMap`], with their index.
-pub type IntoIter = std::iter::Enumerate<std::vec::IntoIter<Entry>>;
+pub type IntoIter = Enumerate<vec::IntoIter<Entry>>;
 
 impl<'a> IntoIterator for &'a CodeMap {
 	type IntoIter = Iter<'a>;
@@ -105,6 +110,7 @@ pub struct Entry {
 impl Entry {
 	/// Creates a new code map entry from a source `span` and a fragment
 	/// `volume`.
+	#[must_use]
 	pub const fn new(span: Span, volume: usize) -> Self {
 		Self { span, volume }
 	}
@@ -138,8 +144,8 @@ impl<T: fmt::Display> fmt::Display for Mapped<T> {
 	}
 }
 
-impl<T: 'static + std::error::Error> std::error::Error for Mapped<T> {
-	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+impl<T: 'static + StdError> StdError for Mapped<T> {
+	fn source(&self) -> Option<&(dyn StdError + 'static)> {
 		Some(&self.value)
 	}
 }
@@ -168,7 +174,7 @@ mod tests {
 		assert_eq!(code_map.len(), expected.len());
 		assert_eq!(value.traverse().count(), expected.len());
 		for (i, entry) in code_map {
-			assert_eq!(entry, expected[i])
+			assert_eq!(entry, expected[i]);
 		}
 	}
 
@@ -205,7 +211,7 @@ mod tests {
 		assert_eq!(code_map.len(), expected.len());
 		assert_eq!(value.traverse().count(), expected.len());
 		for (i, entry) in code_map {
-			assert_eq!(entry, expected[i])
+			assert_eq!(entry, expected[i]);
 		}
 	}
 }

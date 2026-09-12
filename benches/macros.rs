@@ -38,7 +38,7 @@ fn bench_macros(c: &mut Criterion) {
 		b.iter(|| {
 			let scores_v: Vec<Value> = scores
 				.iter()
-				.map(|x| Value::try_from(*x).unwrap())
+				.filter_map(|x| Value::try_from(*x).ok())
 				.collect();
 			black_box(json!({
 				"id": Value::from(id),

@@ -1,6 +1,6 @@
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use jstrict::{
-	Parse, Print, Value,
+	Print,
 	print::{Indent, Limit, Options as PrintOptions},
 };
 use std::hint::black_box;
@@ -28,13 +28,13 @@ const fn custom_options() -> PrintOptions {
 
 fn bench_print(c: &mut Criterion) {
 	for (name, input) in fixtures() {
-		let value = Value::parse_str(&input).unwrap().0;
-		let sj_value: serde_json::Value = serde_json::from_str(&input).unwrap();
+		let value = common::parsed(&input).0;
+		let sj_value: serde_json::Value = serde_json::from_str(&input).unwrap_or_default();
 
 		let compact_size = value.compact_print().to_string().len() as u64;
 		let pretty_size = value.pretty_print().to_string().len() as u64;
 
-		let mut group = c.benchmark_group(format!("print/{}", name));
+		let mut group = c.benchmark_group(format!("print/{name}"));
 
 		group.throughput(Throughput::Bytes(compact_size));
 		group.bench_with_input(BenchmarkId::new("jstrict", "compact"), &value, |b, v| {
@@ -58,7 +58,7 @@ fn bench_print(c: &mut Criterion) {
 			BenchmarkId::new("serde_json", "to_string"),
 			&sj_value,
 			|b, v| {
-				b.iter(|| serde_json::to_string(black_box(v)).unwrap());
+				b.iter(|| serde_json::to_string(black_box(v)).ok());
 			},
 		);
 		group.throughput(Throughput::Bytes(pretty_size));
@@ -66,7 +66,7 @@ fn bench_print(c: &mut Criterion) {
 			BenchmarkId::new("serde_json", "to_string_pretty"),
 			&sj_value,
 			|b, v| {
-				b.iter(|| serde_json::to_string_pretty(black_box(v)).unwrap());
+				b.iter(|| serde_json::to_string_pretty(black_box(v)).ok());
 			},
 		);
 

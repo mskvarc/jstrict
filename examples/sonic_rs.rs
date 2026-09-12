@@ -9,7 +9,7 @@ fn main() {
 	});
 
 	// We convert the `sonic_rs` value into a `jstrict` value.
-	let b = jstrict::Value::from_sonic_rs(a);
+	let b = jstrict::Value::from_sonic_rs(&a);
 
 	// We convert it back into a `sonic_rs` value.
 	let _ = jstrict::Value::into_sonic_rs(b);

@@ -21,19 +21,16 @@ impl Parse for StartFragment {
 			(_, Some('{')) => {
 				parser.skip_whitespaces()?;
 
-				match parser.peek_char()? {
-					Some('}') => {
-						parser.next_char()?;
-						Ok((StartFragment::Empty, i))
-					}
-					_ => {
-						let e = parser.begin_fragment();
-						let key = Key::parse_in(parser, Context::ObjectKey)?;
-						parser.skip_whitespaces()?;
-						match parser.next_char()? {
-							(_, Some(':')) => Ok((Self::NonEmpty((key.0, e)), i)),
-							(p, unexpected) => Err(Error::unexpected(p, unexpected)),
-						}
+				if let Some('}') = parser.peek_char()? {
+					parser.next_char()?;
+					Ok((StartFragment::Empty, i))
+				} else {
+					let e = parser.begin_fragment();
+					let key = Key::parse_in(parser, Context::ObjectKey)?;
+					parser.skip_whitespaces()?;
+					match parser.next_char()? {
+						(_, Some(':')) => Ok((Self::NonEmpty((key.0, e)), i)),
+						(p, unexpected) => Err(Error::unexpected(p, unexpected)),
 					}
 				}
 			}

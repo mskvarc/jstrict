@@ -1,5 +1,4 @@
 use criterion::{Criterion, criterion_group, criterion_main};
-use jstrict::{Parse, Value};
 use std::hint::black_box;
 
 mod common;
@@ -36,10 +35,12 @@ fn bench_traverse(c: &mut Criterion) {
 
 fn bench_object_lookup(c: &mut Criterion) {
 	let json = common::wide_object(1_000);
-	let value = Value::parse_str(&json).unwrap().0;
-	let object = value.as_object().unwrap();
+	let value = common::parsed(&json).0;
+	let Some(object) = value.as_object() else {
+		return;
+	};
 
-	let keys: Vec<String> = (0..1_000).map(|i| format!("key_{}", i)).collect();
+	let keys: Vec<String> = (0..1_000).map(|i| format!("key_{i}")).collect();
 
 	c.bench_function("access/object_get/wide_1k", |b| {
 		b.iter(|| {
@@ -65,7 +66,7 @@ fn bench_object_lookup(c: &mut Criterion) {
 		});
 	});
 
-	let missing: Vec<String> = (0..1_000).map(|i| format!("missing_{}", i)).collect();
+	let missing: Vec<String> = (0..1_000).map(|i| format!("missing_{i}")).collect();
 	c.bench_function("access/object_get_missing/wide_1k", |b| {
 		b.iter(|| {
 			let mut n = 0usize;
@@ -84,7 +85,7 @@ fn bench_get_fragment(c: &mut Criterion) {
 	let total = medium.volume();
 	let mut rng = common::Rng::new(common::SEED);
 	let indices: Vec<usize> = (0..1_000)
-		.map(|_| rng.range(total as u64) as usize)
+		.map(|_| usize::try_from(rng.range(total as u64)).unwrap_or(0))
 		.collect();
 
 	c.bench_function("access/get_fragment/medium", |b| {

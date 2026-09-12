@@ -1,10 +1,11 @@
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
+use jstrict::parse::{parse_slice_value, parse_str_value};
 use jstrict::{Parse, Value, parse::Options};
 use std::hint::black_box;
 
 mod common;
 
-/// Fixtures with serde_json baseline (within serde_json's default recursion limit).
+/// Fixtures with `serde_json` baseline (within `serde_json`'s default recursion limit).
 fn fixtures_with_baseline() -> Vec<(&'static str, String)> {
 	vec![
 		("tiny", common::tiny()),
@@ -19,7 +20,7 @@ fn fixtures_with_baseline() -> Vec<(&'static str, String)> {
 	]
 }
 
-/// Pathological-depth fixtures — serde_json's default recursion limit (128) rejects these.
+/// Pathological-depth fixtures — `serde_json`'s default recursion limit (128) rejects these.
 fn deep_fixtures() -> Vec<(&'static str, String)> {
 	vec![
 		("deep_array_256", common::deep_array(256)),
@@ -28,26 +29,26 @@ fn deep_fixtures() -> Vec<(&'static str, String)> {
 }
 
 fn bench_parse_group(c: &mut Criterion, name: &str, input: &str, with_baseline: bool) {
-	let mut group = c.benchmark_group(format!("parse/{}", name));
+	let mut group = c.benchmark_group(format!("parse/{name}"));
 	group.throughput(Throughput::Bytes(input.len() as u64));
 
 	group.bench_with_input(BenchmarkId::new("jstrict", "strict"), input, |b, s| {
-		b.iter(|| Value::parse_str(black_box(s)).unwrap());
+		b.iter(|| Value::parse_str(black_box(s)).ok());
 	});
 
 	let bytes = input.as_bytes().to_vec();
 	group.bench_with_input(BenchmarkId::new("jstrict", "slice"), &bytes, |b, s| {
-		b.iter(|| Value::parse_slice(black_box(s.as_slice())).unwrap());
+		b.iter(|| Value::parse_slice(black_box(s.as_slice())).ok());
 	});
 
 	let opts = Options::flexible();
 	group.bench_with_input(BenchmarkId::new("jstrict", "flexible"), input, |b, s| {
-		b.iter(|| Value::parse_str_with(black_box(s), opts).unwrap());
+		b.iter(|| Value::parse_str_with(black_box(s), opts).ok());
 	});
 
 	if with_baseline {
 		group.bench_with_input(BenchmarkId::new("serde_json", "from_str"), input, |b, s| {
-			b.iter(|| serde_json::from_str::<serde_json::Value>(black_box(s)).unwrap());
+			b.iter(|| serde_json::from_str::<serde_json::Value>(black_box(s)).ok());
 		});
 	}
 
@@ -69,13 +70,13 @@ fn bench_parse_pathological(c: &mut Criterion) {
 	let deep = common::deep_array(1024);
 	group.throughput(Throughput::Bytes(deep.len() as u64));
 	group.bench_function("deep_array_1024", |b| {
-		b.iter(|| Value::parse_str(black_box(deep.as_str())).unwrap())
+		b.iter(|| Value::parse_str(black_box(deep.as_str())).ok());
 	});
 
 	let huge = common::huge_number(1024);
 	group.throughput(Throughput::Bytes(huge.len() as u64));
 	group.bench_function("huge_number_1kb", |b| {
-		b.iter(|| Value::parse_str(black_box(huge.as_str())).unwrap())
+		b.iter(|| Value::parse_str(black_box(huge.as_str())).ok());
 	});
 
 	let escapes = {
@@ -88,17 +89,17 @@ fn bench_parse_pathological(c: &mut Criterion) {
 	};
 	group.throughput(Throughput::Bytes(escapes.len() as u64));
 	group.bench_function("unicode_escape_heavy", |b| {
-		b.iter(|| Value::parse_str(black_box(escapes.as_str())).unwrap())
+		b.iter(|| Value::parse_str(black_box(escapes.as_str())).ok());
 	});
 
 	let surrogates = common::surrogate_heavy(1_000);
 	group.throughput(Throughput::Bytes(surrogates.len() as u64));
 	group.bench_function("surrogate_pair_heavy_strict", |b| {
-		b.iter(|| Value::parse_str(black_box(surrogates.as_str())).unwrap())
+		b.iter(|| Value::parse_str(black_box(surrogates.as_str())).ok());
 	});
 	let flex = Options::flexible();
 	group.bench_function("surrogate_pair_heavy_flexible", |b| {
-		b.iter(|| Value::parse_str_with(black_box(surrogates.as_str()), flex).unwrap())
+		b.iter(|| Value::parse_str_with(black_box(surrogates.as_str()), flex).ok());
 	});
 
 	group.finish();
@@ -109,26 +110,26 @@ fn bench_parse_pathological(c: &mut Criterion) {
 /// `Mapper` monomorphisation win.
 fn bench_parse_value(c: &mut Criterion) {
 	for (name, input) in fixtures_with_baseline() {
-		let mut group = c.benchmark_group(format!("parse_value/{}", name));
+		let mut group = c.benchmark_group(format!("parse_value/{name}"));
 		group.throughput(Throughput::Bytes(input.len() as u64));
 
 		group.bench_with_input(
 			BenchmarkId::new("jstrict", "str_value"),
 			input.as_str(),
-			|b, s| b.iter(|| jstrict::parse::parse_str_value(black_box(s)).unwrap()),
+			|b, s| b.iter(|| parse_str_value(black_box(s)).ok()),
 		);
 
 		let bytes = input.as_bytes().to_vec();
 		group.bench_with_input(
 			BenchmarkId::new("jstrict", "slice_value"),
 			&bytes,
-			|b, s| b.iter(|| jstrict::parse::parse_slice_value(black_box(s.as_slice())).unwrap()),
+			|b, s| b.iter(|| parse_slice_value(black_box(s.as_slice())).ok()),
 		);
 
 		group.bench_with_input(
 			BenchmarkId::new("serde_json", "from_str"),
 			input.as_str(),
-			|b, s| b.iter(|| serde_json::from_str::<serde_json::Value>(black_box(s)).unwrap()),
+			|b, s| b.iter(|| serde_json::from_str::<serde_json::Value>(black_box(s)).ok()),
 		);
 
 		group.finish();

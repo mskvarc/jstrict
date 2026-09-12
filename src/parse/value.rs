@@ -119,9 +119,6 @@ impl Parse for Value {
 			ObjectEntry((Object, usize), (Key, usize)),
 		}
 
-		let mut stack: Vec<StackItem> = vec![];
-		let mut value: Option<(Value, usize)> = None;
-
 		const fn stack_context(stack: &[StackItem], root: Context) -> Context {
 			match stack.last() {
 				Some(StackItem::Array(_) | StackItem::ArrayItem(_)) => Context::Array,
@@ -130,6 +127,9 @@ impl Parse for Value {
 				None => root,
 			}
 		}
+
+		let mut stack: Vec<StackItem> = vec![];
+		let mut value: Option<(Value, usize)> = None;
 
 		loop {
 			match stack.pop() {
@@ -146,16 +146,16 @@ impl Parse for Value {
 						};
 					}
 					(Fragment::BeginArray, i) => {
-						stack.push(StackItem::ArrayItem((Array::new(), i)))
+						stack.push(StackItem::ArrayItem((Array::new(), i)));
 					}
 					(Fragment::BeginObject(key), i) => {
-						stack.push(StackItem::ObjectEntry((Object::new(), i), key))
+						stack.push(StackItem::ObjectEntry((Object::new(), i), key));
 					}
 				},
 				Some(StackItem::Array((array, i))) => {
 					match array::ContinueFragment::parse_in(parser, i)? {
 						array::ContinueFragment::Item => {
-							stack.push(StackItem::ArrayItem((array, i)))
+							stack.push(StackItem::ArrayItem((array, i)));
 						}
 						array::ContinueFragment::End => value = Some((Value::Array(array), i)),
 					}
@@ -168,18 +168,18 @@ impl Parse for Value {
 						}
 						(Fragment::BeginArray, j) => {
 							stack.push(StackItem::ArrayItem((array, i)));
-							stack.push(StackItem::ArrayItem((Array::new(), j)))
+							stack.push(StackItem::ArrayItem((Array::new(), j)));
 						}
 						(Fragment::BeginObject(value_key), j) => {
 							stack.push(StackItem::ArrayItem((array, i)));
-							stack.push(StackItem::ObjectEntry((Object::new(), j), value_key))
+							stack.push(StackItem::ObjectEntry((Object::new(), j), value_key));
 						}
 					}
 				}
 				Some(StackItem::Object((object, i))) => {
 					match object::ContinueFragment::parse_in(parser, i)? {
 						object::ContinueFragment::Entry(key) => {
-							stack.push(StackItem::ObjectEntry((object, i), key))
+							stack.push(StackItem::ObjectEntry((object, i), key));
 						}
 						object::ContinueFragment::End => value = Some((Value::Object(object), i)),
 					}
@@ -193,11 +193,11 @@ impl Parse for Value {
 						}
 						(Fragment::BeginArray, j) => {
 							stack.push(StackItem::ObjectEntry((object, i), (key, e)));
-							stack.push(StackItem::ArrayItem((Array::new(), j)))
+							stack.push(StackItem::ArrayItem((Array::new(), j)));
 						}
 						(Fragment::BeginObject(value_key), j) => {
 							stack.push(StackItem::ObjectEntry((object, i), (key, e)));
-							stack.push(StackItem::ObjectEntry((Object::new(), j), value_key))
+							stack.push(StackItem::ObjectEntry((Object::new(), j), value_key));
 						}
 					}
 				}

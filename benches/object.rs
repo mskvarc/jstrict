@@ -1,6 +1,6 @@
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use jstrict::{
-	Object, Parse, Value,
+	Object, Value,
 	object::{Entry, Key},
 };
 use std::hint::black_box;
@@ -9,14 +9,14 @@ mod common;
 
 fn build_unique_entries(n: usize) -> Vec<Entry> {
 	(0..n)
-		.map(|i| Entry::new(Key::from(format!("k{}", i)), Value::Number(i.into())))
+		.map(|i| Entry::new(Key::from(format!("k{i}")), Value::Number(i.into())))
 		.collect()
 }
 
 fn build_dup_entries(n_unique: usize, n_dupes: usize) -> Vec<Entry> {
 	let mut v = Vec::with_capacity(n_unique * n_dupes);
 	for i in 0..n_unique {
-		let key = Key::from(format!("k{}", i));
+		let key = Key::from(format!("k{i}"));
 		for j in 0..n_dupes {
 			v.push(Entry::new(key.clone(), Value::Number(j.into())));
 		}
@@ -43,7 +43,7 @@ fn bench_insert(c: &mut Criterion) {
 	let mut group = c.benchmark_group("object/insert_with_dupes");
 	for (uniq, dups) in [(16usize, 16usize), (64, 16), (256, 4)] {
 		let entries = build_dup_entries(uniq, dups);
-		let id = format!("{}u_x{}", uniq, dups);
+		let id = format!("{uniq}u_x{dups}");
 		group.bench_with_input(BenchmarkId::from_parameter(id), &entries, |b, entries| {
 			b.iter(|| {
 				let mut o = Object::new();
@@ -70,10 +70,12 @@ fn bench_from_vec(c: &mut Criterion) {
 
 fn bench_get(c: &mut Criterion) {
 	let json = common::duplicate_keys(64, 16);
-	let value = Value::parse_str(&json).unwrap().0;
-	let object = value.as_object().unwrap();
+	let value = common::parsed(&json).0;
+	let Some(object) = value.as_object() else {
+		return;
+	};
 
-	let keys: Vec<String> = (0..64).map(|i| format!("k{}", i)).collect();
+	let keys: Vec<String> = (0..64).map(|i| format!("k{i}")).collect();
 
 	c.bench_function("object/get_dup/64x16", |b| {
 		b.iter(|| {
@@ -103,11 +105,10 @@ fn bench_get(c: &mut Criterion) {
 		b.iter(|| {
 			let mut n = 0usize;
 			for i in 0..4096usize {
-				let key = format!("k{}", i);
+				let key = format!("k{i}");
 				if unique_obj
 					.get_unique(black_box(key.as_str()))
-					.unwrap()
-					.is_some()
+					.is_ok_and(|v| v.is_some())
 				{
 					n += 1;
 				}
@@ -123,7 +124,7 @@ fn bench_iter(c: &mut Criterion) {
 	c.bench_function("object/iter/4k", |b| {
 		b.iter(|| {
 			let mut n = 0usize;
-			for entry in black_box(&object).iter() {
+			for entry in black_box(&object) {
 				if entry.value.is_number() {
 					n += 1;
 				}

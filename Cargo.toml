@@ -62,17 +62,6 @@ ryu-js = "1.0.3"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 
-[lints.clippy]
-wildcard_dependencies = "warn"
-wildcard_imports = "warn"
-used_underscore_binding = "warn"
-missing_const_for_fn = "warn"
-cloned_instead_of_copied = "warn"
-unnecessary_self_imports = "warn"
-redundant_clone = "warn"
-needless_collect = "warn"
-map_unwrap_or = "warn"
-
 [[example]]
 name = "serde"
 required-features = ["serde"]
@@ -131,3 +120,32 @@ harness = false
 [[bench]]
 name = "end_to_end"
 harness = false
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+absolute_paths = "deny"
+allow_attributes_without_reason = "deny"
+arc_with_non_send_sync = "deny"
+await_holding_lock = "deny"
+branches_sharing_code = "warn"
+cast_possible_truncation = "deny"
+cast_possible_wrap = "deny"
+cast_sign_loss = "deny"
+cloned_instead_of_copied = "warn"
+expect_used = "deny"
+future_not_send = "deny"
+get_unwrap = "deny"
+map_unwrap_or = "deny"
+missing_const_for_fn = "warn"
+needless_collect = "warn"
+panic = "deny"
+redundant_clone = "warn"
+todo = "deny"
+unimplemented = "deny"
+unnecessary_self_imports = "warn"
+unreachable = "deny"
+unwrap_used = "deny"
+used_underscore_binding = "warn"
+wildcard_dependencies = "deny"
+wildcard_enum_match_arm = "deny"
+wildcard_imports = "deny"

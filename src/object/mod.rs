@@ -9,8 +9,10 @@ use crate::code_map::Mapped;
 use crate::{CodeMap, FragmentRef, UnorderedEq, UnorderedPartialEq, Value};
 use compact_str::CompactString;
 use core::cmp::Ordering;
-use core::fmt;
 use core::hash::{Hash, Hasher};
+use core::{fmt, mem, slice};
+use std::error::Error as StdError;
+use std::vec::IntoIter;
 
 mod index_map;
 
@@ -92,6 +94,10 @@ impl Entry {
 	/// index `0` is the entry itself and index `1` its key.
 	///
 	/// On failure, returns the number of fragments left to skip.
+	/// # Errors
+	///
+	/// Returns the number of fragments left to skip when `index` does not resolve
+	/// to a fragment within this object.
 	pub fn get_fragment(&self, index: usize) -> Result<FragmentRef<'_>, usize> {
 		match index {
 			0 => Ok(FragmentRef::Entry(self)),
@@ -132,11 +138,13 @@ impl Default for Object {
 
 impl Object {
 	/// Creates a new empty object.
+	#[must_use]
 	pub fn new() -> Self {
 		Self::default()
 	}
 
 	/// Creates a new empty object with room for `capacity` entries.
+	#[must_use]
 	pub fn with_capacity(capacity: usize) -> Self {
 		Self {
 			entries: Vec::with_capacity(capacity),
@@ -146,6 +154,7 @@ impl Object {
 
 	/// Builds an object from a list of entries, keeping their order and any
 	/// duplicate keys.
+	#[must_use]
 	pub fn from_vec(entries: Vec<Entry>) -> Self {
 		let mut indexes = IndexMap::with_capacity(entries.len());
 		for i in 0..entries.len() {
@@ -157,16 +166,19 @@ impl Object {
 
 	/// Returns the number of entries this object can hold without
 	/// reallocating.
+	#[must_use]
 	pub const fn capacity(&self) -> usize {
 		self.entries.capacity()
 	}
 
 	/// Returns the number of entries in this object, duplicates included.
+	#[must_use]
 	pub const fn len(&self) -> usize {
 		self.entries.len()
 	}
 
 	/// Checks if this object has no entries.
+	#[must_use]
 	pub const fn is_empty(&self) -> bool {
 		self.entries.is_empty()
 	}
@@ -175,6 +187,10 @@ impl Object {
 	/// of this object: index `0` is the first entry.
 	///
 	/// On failure, returns the number of fragments left to skip.
+	/// # Errors
+	///
+	/// Returns the number of fragments left to skip when `index` does not resolve
+	/// to a fragment within this object.
 	pub fn get_fragment(&self, mut index: usize) -> Result<FragmentRef<'_>, usize> {
 		for e in &self.entries {
 			match e.get_fragment(index) {
@@ -187,6 +203,7 @@ impl Object {
 	}
 
 	/// Returns the entries of this object as a slice, in definition order.
+	#[must_use]
 	pub fn entries(&self) -> &[Entry] {
 		&self.entries
 	}
@@ -207,6 +224,7 @@ impl Object {
 	/// value with its offset in `code_map`.
 	///
 	/// `offset` is the code map offset of the object itself.
+	#[must_use]
 	pub fn iter_mapped<'m>(&self, code_map: &'m CodeMap, offset: usize) -> IterMapped<'_, 'm> {
 		IterMapped {
 			entries: self.entries.iter(),
@@ -266,6 +284,9 @@ impl Object {
 	/// Returns an error if multiple entries match the key.
 	///
 	/// Runs in `O(1)` (average).
+	/// # Errors
+	///
+	/// Returns [`Duplicate`] if more than one entry matches `key`.
 	pub fn get_unique<Q>(&self, key: &Q) -> Result<Option<&Value>, Duplicate<&Entry>>
 	where
 		Q: ?Sized + Hash + Equivalent<Key>,
@@ -286,6 +307,9 @@ impl Object {
 	/// Returns an error if multiple entries match the key.
 	///
 	/// Runs in `O(1)` (average).
+	/// # Errors
+	///
+	/// Returns [`Duplicate`] if more than one entry matches `key`.
 	pub fn get_unique_mut<Q>(&mut self, key: &Q) -> Result<Option<&mut Value>, Duplicate<&Entry>>
 	where
 		Q: ?Sized + Hash + Equivalent<Key>,
@@ -331,6 +355,9 @@ impl Object {
 	/// Returns an error if multiple entries match the key.
 	///
 	/// Runs in `O(1)` (average).
+	/// # Errors
+	///
+	/// Returns [`Duplicate`] if more than one entry matches `key`.
 	pub fn get_unique_entry<Q>(&self, key: &Q) -> Result<Option<&Entry>, Duplicate<&Entry>>
 	where
 		Q: ?Sized + Hash + Equivalent<Key>,
@@ -389,13 +416,12 @@ impl Object {
 		Q: ?Sized + Hash + Equivalent<Key> + ToOwned,
 		Q::Owned: Into<Key>,
 	{
-		let index = match self.index_of(key) {
-			Some(index) => index,
-			None => {
-				let index = self.entries.len();
-				self.push(key.to_owned().into(), f());
-				index
-			}
+		let index = if let Some(index) = self.index_of(key) {
+			index
+		} else {
+			let index = self.entries.len();
+			self.push(key.to_owned().into(), f());
+			index
 		};
 
 		&self.entries[index].value
@@ -409,13 +435,12 @@ impl Object {
 		Q: ?Sized + Hash + Equivalent<Key> + ToOwned,
 		Q::Owned: Into<Key>,
 	{
-		let index = match self.index_of(key) {
-			Some(index) => index,
-			None => {
-				let index = self.entries.len();
-				self.push(key.to_owned().into(), f());
-				index
-			}
+		let index = if let Some(index) = self.index_of(key) {
+			index
+		} else {
+			let index = self.entries.len();
+			self.push(key.to_owned().into(), f());
+			index
 		};
 
 		&mut self.entries[index].value
@@ -490,6 +515,9 @@ impl Object {
 	///
 	/// Runs in `O(n)` (average). `O(1)` to find the entry, `O(n)` to compute
 	/// the entry fragment offset.
+	/// # Errors
+	///
+	/// Returns [`Duplicate`] if more than one entry matches `key`.
 	pub fn get_unique_mapped_entry<Q>(
 		&self,
 		code_map: &CodeMap,
@@ -542,6 +570,9 @@ impl Object {
 	///
 	/// Runs in `O(n)` (average). `O(1)` to find the entry, `O(n)` to compute
 	/// the entry fragment offset.
+	/// # Errors
+	///
+	/// Returns [`Duplicate`] if more than one entry matches `key`.
 	pub fn get_unique_mapped_entry_with_index<Q>(
 		&self,
 		code_map: &CodeMap,
@@ -593,6 +624,9 @@ impl Object {
 	///
 	/// Runs in `O(n)` (average). `O(1)` to find the entry, `O(n)` to compute
 	/// the entry fragment offset.
+	/// # Errors
+	///
+	/// Returns [`Duplicate`] if more than one entry matches `key`.
 	pub fn get_unique_mapped<Q>(
 		&self,
 		code_map: &CodeMap,
@@ -645,6 +679,9 @@ impl Object {
 	///
 	/// Runs in `O(n)` (average). `O(1)` to find the entry, `O(n)` to compute
 	/// the entry fragment offset.
+	/// # Errors
+	///
+	/// Returns [`Duplicate`] if more than one entry matches `key`.
 	pub fn get_unique_mapped_with_index<Q>(
 		&self,
 		code_map: &CodeMap,
@@ -666,11 +703,13 @@ impl Object {
 	}
 
 	/// Returns the first entry of this object.
+	#[must_use]
 	pub fn first(&self) -> Option<&Entry> {
 		self.entries.first()
 	}
 
 	/// Returns the last entry of this object.
+	#[must_use]
 	pub fn last(&self) -> Option<&Entry> {
 		self.entries.last()
 	}
@@ -739,23 +778,20 @@ impl Object {
 	/// Otherwise, `None` is returned.
 	pub fn insert(&mut self, key: Key, value: Value) -> Option<RemovedByInsertion<'_>> {
 		let new_index = self.entries.len();
-		match self
+		if let Some(index) = self
 			.indexes
 			.lookup_or_insert(&self.entries, new_index, &key)
 		{
-			Some(index) => {
-				let mut entry = Entry::new(key, value);
-				core::mem::swap(&mut entry, &mut self.entries[index]);
-				Some(RemovedByInsertion {
-					index,
-					first: Some(entry),
-					object: self,
-				})
-			}
-			None => {
-				self.entries.push(Entry::new(key, value));
-				None
-			}
+			let mut entry = Entry::new(key, value);
+			mem::swap(&mut entry, &mut self.entries[index]);
+			Some(RemovedByInsertion {
+				index,
+				first: Some(entry),
+				object: self,
+			})
+		} else {
+			self.entries.push(Entry::new(key, value));
+			None
 		}
 	}
 
@@ -767,7 +803,7 @@ impl Object {
 		if let Some(first) = self.entries.first_mut()
 			&& first.key == key
 		{
-			let first = core::mem::replace(first, Entry::new(key, value));
+			let first = mem::replace(first, Entry::new(key, value));
 			return RemovedByInsertFront {
 				first: Some(first),
 				object: self,
@@ -796,7 +832,13 @@ impl Object {
 	/// Returns an error if multiple entries match the key.
 	///
 	/// Runs in `O(n)` time (average).
-	#[allow(clippy::result_large_err)]
+	#[allow(
+		clippy::result_large_err,
+		reason = "the duplicate-key error carries the conflicting Entry by value; boxing it would pessimise the common Ok path"
+	)]
+	/// # Errors
+	///
+	/// Returns [`Duplicate`] if more than one entry matches `key`.
 	pub fn remove_unique<Q>(&mut self, key: &Q) -> Result<Option<Entry>, Duplicate<Entry>>
 	where
 		Q: ?Sized + Hash + Equivalent<Key>,
@@ -835,24 +877,24 @@ impl Object {
 			item.canonicalize_with(buffer);
 		}
 
-		self.sort()
+		self.sort();
 	}
 
 	/// Puts this JSON object in canonical form according to
 	/// [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785#name-generation-of-canonical-jso).
 	#[cfg(feature = "canonicalize")]
 	pub fn canonicalize(&mut self) {
-		crate::with_canonicalize_buffer(|buf| self.canonicalize_with(buf))
+		crate::with_canonicalize_buffer(|buf| self.canonicalize_with(buf));
 	}
 }
 
 /// Iterator over the entries of an [`Object`], in definition order.
-pub type Iter<'a> = core::slice::Iter<'a, Entry>;
+pub type Iter<'a> = slice::Iter<'a, Entry>;
 
 /// Iterator over the entries of an [`Object`], yielding mutable values.
 ///
 /// Returned by [`Object::iter_mut`].
-pub struct IterMut<'a>(std::slice::IterMut<'a, Entry>);
+pub struct IterMut<'a>(slice::IterMut<'a, Entry>);
 
 impl<'a> Iterator for IterMut<'a> {
 	type Item = (&'a Key, &'a mut Value);
@@ -866,18 +908,21 @@ impl<'a> Iterator for IterMut<'a> {
 ///
 /// Returned by [`Object::iter_mapped`].
 pub struct IterMapped<'a, 'm> {
-	entries: std::slice::Iter<'a, Entry>,
+	entries: slice::Iter<'a, Entry>,
 	code_map: &'m CodeMap,
 	offset: usize,
 }
 
-impl<'a, 'm> Iterator for IterMapped<'a, 'm> {
+impl<'a> Iterator for IterMapped<'a, '_> {
 	type Item = MappedEntry<'a>;
 
 	fn next(&mut self) -> Option<Self::Item> {
 		self.entries.next().map(|e| {
 			let offset = self.offset;
-			self.offset += 2 + self.code_map.get(self.offset + 2).unwrap().volume;
+			self.offset += 2 + self
+				.code_map
+				.get(self.offset + 2)
+				.map_or(0, |entry| entry.volume);
 			Mapped::new(offset, e.as_ref().into_mapped(offset + 1, offset + 2))
 		})
 	}
@@ -938,7 +983,7 @@ impl Ord for Object {
 
 impl Hash for Object {
 	fn hash<H: Hasher>(&self, state: &mut H) {
-		self.entries.hash(state)
+		self.entries.hash(state);
 	}
 }
 
@@ -958,7 +1003,7 @@ impl From<Vec<Entry>> for Object {
 
 impl<'a> IntoIterator for &'a Object {
 	type Item = &'a Entry;
-	type IntoIter = core::slice::Iter<'a, Entry>;
+	type IntoIter = slice::Iter<'a, Entry>;
 
 	fn into_iter(self) -> Self::IntoIter {
 		self.iter()
@@ -976,7 +1021,7 @@ impl<'a> IntoIterator for &'a mut Object {
 
 impl IntoIterator for Object {
 	type Item = Entry;
-	type IntoIter = std::vec::IntoIter<Entry>;
+	type IntoIter = IntoIter<Entry>;
 
 	fn into_iter(self) -> Self::IntoIter {
 		self.entries.into_iter()
@@ -1026,7 +1071,7 @@ pub enum Indexes<'a> {
 		first: Option<usize>,
 
 		/// Positions of the remaining matching entries.
-		other: core::slice::Iter<'a, usize>,
+		other: slice::Iter<'a, usize>,
 	},
 
 	/// No entry matches the key.
@@ -1034,7 +1079,7 @@ pub enum Indexes<'a> {
 	None,
 }
 
-impl<'a> Iterator for Indexes<'a> {
+impl Iterator for Indexes<'_> {
 	type Item = usize;
 
 	fn next(&mut self) -> Option<Self::Item> {
@@ -1136,7 +1181,7 @@ entries_iter_mut! {
 
 		fn next(&mut self, index) {
 			// This is safe because there is no aliasing between the values.
-			unsafe { core::mem::transmute(&mut self.entries[index].value) }
+			unsafe { mem::transmute(&mut self.entries[index].value) }
 		}
 	}
 
@@ -1145,7 +1190,7 @@ entries_iter_mut! {
 
 		fn next(&mut self, index) {
 			// This is safe because there is no aliasing between the values.
-			unsafe { (index, core::mem::transmute::<&mut Value, &'a mut Value>(&mut self.entries[index].value)) }
+			unsafe { (index, mem::transmute::<&mut Value, &'a mut Value>(&mut self.entries[index].value)) }
 		}
 	}
 }
@@ -1255,23 +1300,22 @@ pub struct RemovedByInsertion<'a> {
 	object: &'a mut Object,
 }
 
-impl<'a> Iterator for RemovedByInsertion<'a> {
+impl Iterator for RemovedByInsertion<'_> {
 	type Item = Entry;
 
 	fn next(&mut self) -> Option<Self::Item> {
-		match self.first.take() {
-			Some(entry) => Some(entry),
-			None => {
-				let key = &self.object.entries[self.index].key;
-				self.object
-					.redundant_index_of(key)
-					.and_then(|index| self.object.remove_at(index))
-			}
+		if let Some(entry) = self.first.take() {
+			Some(entry)
+		} else {
+			let key = &self.object.entries[self.index].key;
+			self.object
+				.redundant_index_of(key)
+				.and_then(|index| self.object.remove_at(index))
 		}
 	}
 }
 
-impl<'a> Drop for RemovedByInsertion<'a> {
+impl Drop for RemovedByInsertion<'_> {
 	fn drop(&mut self) {
 		self.last();
 	}
@@ -1285,23 +1329,22 @@ pub struct RemovedByInsertFront<'a> {
 	object: &'a mut Object,
 }
 
-impl<'a> Iterator for RemovedByInsertFront<'a> {
+impl Iterator for RemovedByInsertFront<'_> {
 	type Item = Entry;
 
 	fn next(&mut self) -> Option<Self::Item> {
-		match self.first.take() {
-			Some(entry) => Some(entry),
-			None => {
-				let key = &self.object.entries[0].key;
-				self.object
-					.redundant_index_of(key)
-					.and_then(|index| self.object.remove_at(index))
-			}
+		if let Some(entry) = self.first.take() {
+			Some(entry)
+		} else {
+			let key = &self.object.entries[0].key;
+			self.object
+				.redundant_index_of(key)
+				.and_then(|index| self.object.remove_at(index))
 		}
 	}
 }
 
-impl<'a> Drop for RemovedByInsertFront<'a> {
+impl Drop for RemovedByInsertFront<'_> {
 	fn drop(&mut self) {
 		self.last();
 	}
@@ -1318,7 +1361,7 @@ where
 	object: &'a mut Object,
 }
 
-impl<'a, 'q, Q: ?Sized> Iterator for RemovedEntries<'a, 'q, Q>
+impl<Q: ?Sized> Iterator for RemovedEntries<'_, '_, Q>
 where
 	Q: Hash + Equivalent<Key>,
 {
@@ -1331,7 +1374,7 @@ where
 	}
 }
 
-impl<'a, 'q, Q: ?Sized> Drop for RemovedEntries<'a, 'q, Q>
+impl<Q: ?Sized> Drop for RemovedEntries<'_, '_, Q>
 where
 	Q: Hash + Equivalent<Key>,
 {
@@ -1356,7 +1399,7 @@ impl fmt::Display for DuplicateEntry {
 	}
 }
 
-impl std::error::Error for DuplicateEntry {}
+impl StdError for DuplicateEntry {}
 
 #[cfg(test)]
 mod tests {
@@ -1384,7 +1427,7 @@ mod tests {
 		b.push("a".into(), Value::Null);
 
 		assert_ne!(a, b);
-		assert_eq!(a.as_unordered(), b.as_unordered())
+		assert_eq!(a.as_unordered(), b.as_unordered());
 	}
 
 	#[test]
@@ -1398,7 +1441,7 @@ mod tests {
 		b.push("a".into(), Value::Null);
 
 		assert_eq!(a, b);
-		assert_eq!(a.as_unordered(), b.as_unordered())
+		assert_eq!(a.as_unordered(), b.as_unordered());
 	}
 
 	#[test]

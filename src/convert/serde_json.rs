@@ -18,6 +18,7 @@ impl Value {
 	/// // We convert it back into a `serde_json` value.
 	/// let _ = jstrict::Value::into_serde_json(b);
 	/// ```
+	#[must_use]
 	pub fn from_serde_json(value: serde_json::Value) -> Self {
 		match value {
 			serde_json::Value::Null => Self::Null,
@@ -58,6 +59,7 @@ impl Value {
 	/// // We convert it back into a `serde_json` value.
 	/// let _ = jstrict::Value::into_serde_json(b);
 	/// ```
+	#[must_use]
 	pub fn into_serde_json(self) -> serde_json::Value {
 		match self {
 			Self::Null => serde_json::Value::Null,

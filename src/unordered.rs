@@ -1,4 +1,5 @@
 use core::hash::{Hash, Hasher};
+use core::ptr;
 
 /// Wrapper to view a value without considering the order of
 /// the objects entries.
@@ -32,7 +33,7 @@ pub trait BorrowUnordered {
 
 impl<T> BorrowUnordered for T {
 	fn as_unordered(&self) -> &Unordered<Self> {
-		unsafe { core::mem::transmute(self) }
+		unsafe { &*ptr::from_ref(self).cast::<Unordered<Self>>() }
 	}
 }
 
@@ -71,6 +72,6 @@ pub trait UnorderedHash {
 
 impl<T: UnorderedHash> Hash for Unordered<T> {
 	fn hash<H: Hasher>(&self, state: &mut H) {
-		self.0.unordered_hash(state)
+		self.0.unordered_hash(state);
 	}
 }

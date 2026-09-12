@@ -8,8 +8,10 @@
 //!
 //! Parsing is strict by default; [`Options`] relaxes surrogate and codepoint
 //! handling.
+use core::convert::Infallible;
 use decoded_char::DecodedChar;
 use locspan::Span;
+use std::error::Error as StdError;
 use std::fmt;
 
 mod array;
@@ -44,6 +46,7 @@ impl Options {
 	/// Strict mode.
 	///
 	/// All options are set to `false`.
+	#[must_use]
 	pub const fn strict() -> Self {
 		Self {
 			accept_truncated_surrogate_pair: false,
@@ -54,6 +57,7 @@ impl Options {
 	/// Flexible mode.
 	///
 	/// All options are set to `true`.
+	#[must_use]
 	pub const fn flexible() -> Self {
 		Self {
 			accept_truncated_surrogate_pair: true,
@@ -73,11 +77,19 @@ impl Default for Options {
 /// This is the fastest path: the slice parser is monomorphised against
 /// a no-op fragment recorder, so each value is built with zero
 /// `Vec::push` for span tracking.
+///
+/// # Errors
+///
+/// Returns an [`Error`] if the input is not well-formed JSON.
 pub fn parse_str_value(content: &str) -> Result<Value, Error> {
 	parse_str_value_with(content, Options::default())
 }
 
 /// Like [`parse_str_value`] but with a custom [`Options`].
+///
+/// # Errors
+///
+/// Returns an [`Error`] if the input is not well-formed JSON.
 pub fn parse_str_value_with(content: &str, options: Options) -> Result<Value, Error> {
 	let (value, _) = slice::parse_value_str_with(content, options, slice::NoOp)?;
 	Ok(value)
@@ -86,11 +98,19 @@ pub fn parse_str_value_with(content: &str, options: Options) -> Result<Value, Er
 /// Parses a [`Value`] from `&[u8]` without building a [`CodeMap`].
 ///
 /// See [`parse_str_value`].
+///
+/// # Errors
+///
+/// Returns an [`Error`] if the input is not well-formed JSON.
 pub fn parse_slice_value(content: &[u8]) -> Result<Value, Error> {
 	parse_slice_value_with(content, Options::default())
 }
 
 /// Like [`parse_slice_value`] but with a custom [`Options`].
+///
+/// # Errors
+///
+/// Returns an [`Error`] if the input is not well-formed JSON.
 pub fn parse_slice_value_with(content: &[u8], options: Options) -> Result<Value, Error> {
 	let (value, _) = slice::parse_value_slice_with(content, options, slice::NoOp)?;
 	Ok(value)
@@ -112,28 +132,48 @@ pub fn parse_slice_value_with(content: &[u8], options: Options) -> Result<Value,
 /// ```
 pub trait Parse: Sized {
 	/// Parses a value from a UTF-8 byte slice.
+	///
+	/// # Errors
+	///
+	/// Returns an [`Error`] if the input is not well-formed JSON.
 	fn parse_slice(content: &[u8]) -> Result<(Self, CodeMap), Error> {
 		Self::parse_utf8(utf8_decode::Decoder::new(content.iter().copied()))
 			.map_err(Error::io_into_utf8)
 	}
 
 	/// Parses a value from a UTF-8 byte slice, with the given `options`.
+	///
+	/// # Errors
+	///
+	/// Returns an [`Error`] if the input is not well-formed JSON.
 	fn parse_slice_with(content: &[u8], options: Options) -> Result<(Self, CodeMap), Error> {
 		Self::parse_utf8_with(utf8_decode::Decoder::new(content.iter().copied()), options)
 			.map_err(Error::io_into_utf8)
 	}
 
 	/// Parses a value from a string.
+	///
+	/// # Errors
+	///
+	/// Returns an [`Error`] if the input is not well-formed JSON.
 	fn parse_str(content: &str) -> Result<(Self, CodeMap), Error> {
 		Self::parse_utf8(content.chars().map(Ok))
 	}
 
 	/// Parses a value from a string, with the given `options`.
+	///
+	/// # Errors
+	///
+	/// Returns an [`Error`] if the input is not well-formed JSON.
 	fn parse_str_with(content: &str, options: Options) -> Result<(Self, CodeMap), Error> {
 		Self::parse_utf8_with(content.chars().map(Ok), options)
 	}
 
 	/// Parses a value from an infallible iterator of UTF-8 characters.
+	///
+	/// # Errors
+	///
+	/// Returns an [`Error`] if the input is not well-formed JSON.
 	fn parse_infallible_utf8<C>(chars: C) -> Result<(Self, CodeMap), Error>
 	where
 		C: Iterator<Item = char>,
@@ -143,6 +183,10 @@ pub trait Parse: Sized {
 
 	/// Parses a value from an infallible iterator of UTF-8 characters, with
 	/// the given `options`.
+	///
+	/// # Errors
+	///
+	/// Returns an [`Error`] if the input is not well-formed JSON.
 	fn parse_utf8_infallible_with<C>(chars: C, options: Options) -> Result<(Self, CodeMap), Error>
 	where
 		C: Iterator<Item = char>,
@@ -153,6 +197,11 @@ pub trait Parse: Sized {
 	/// Parses a value from a fallible iterator of UTF-8 characters.
 	///
 	/// Stream errors of type `E` are wrapped in [`Error::Stream`].
+	///
+	/// # Errors
+	///
+	/// Returns [`Error::Stream`] if the character stream yields an error, or
+	/// another [`Error`] variant if the input is not well-formed JSON.
 	fn parse_utf8<C, E>(chars: C) -> Result<(Self, CodeMap), Error<E>>
 	where
 		C: Iterator<Item = Result<char, E>>,
@@ -162,6 +211,11 @@ pub trait Parse: Sized {
 
 	/// Parses a value from a fallible iterator of UTF-8 characters, with the
 	/// given `options`.
+	///
+	/// # Errors
+	///
+	/// Returns [`Error::Stream`] if the character stream yields an error, or
+	/// another [`Error`] variant if the input is not well-formed JSON.
 	fn parse_utf8_with<C, E>(chars: C, options: Options) -> Result<(Self, CodeMap), Error<E>>
 	where
 		C: Iterator<Item = Result<char, E>>,
@@ -174,6 +228,10 @@ pub trait Parse: Sized {
 	/// Unlike the `utf8` variants, [`DecodedChar`] carries the byte length of
 	/// each character in the *source* encoding, so spans stay accurate when
 	/// the input is not UTF-8.
+	///
+	/// # Errors
+	///
+	/// Returns an [`Error`] if the input is not well-formed JSON.
 	fn parse_infallible<C>(chars: C) -> Result<(Self, CodeMap), Error>
 	where
 		C: Iterator<Item = DecodedChar>,
@@ -185,6 +243,10 @@ pub trait Parse: Sized {
 
 	/// Parses a value from an infallible iterator of decoded characters, with
 	/// the given `options`.
+	///
+	/// # Errors
+	///
+	/// Returns an [`Error`] if the input is not well-formed JSON.
 	fn parse_infallible_with<C>(chars: C, options: Options) -> Result<(Self, CodeMap), Error>
 	where
 		C: Iterator<Item = DecodedChar>,
@@ -195,6 +257,11 @@ pub trait Parse: Sized {
 	}
 
 	/// Parses a value from a fallible iterator of decoded characters.
+	///
+	/// # Errors
+	///
+	/// Returns [`Error::Stream`] if the character stream yields an error, or
+	/// another [`Error`] variant if the input is not well-formed JSON.
 	fn parse<C, E>(chars: C) -> Result<(Self, CodeMap), Error<E>>
 	where
 		C: Iterator<Item = Result<DecodedChar, E>>,
@@ -206,6 +273,11 @@ pub trait Parse: Sized {
 
 	/// Parses a value from a fallible iterator of decoded characters, with the
 	/// given `options`.
+	///
+	/// # Errors
+	///
+	/// Returns [`Error::Stream`] if the character stream yields an error, or
+	/// another [`Error`] variant if the input is not well-formed JSON.
 	fn parse_with<C, E>(chars: C, options: Options) -> Result<(Self, CodeMap), Error<E>>
 	where
 		C: Iterator<Item = Result<DecodedChar, E>>,
@@ -221,6 +293,11 @@ pub trait Parse: Sized {
 	/// Returns the value along with the index of its code map fragment. This
 	/// is the single method implementors must provide; everything else is a
 	/// wrapper around it.
+	///
+	/// # Errors
+	///
+	/// Returns [`Error::Stream`] if the character stream yields an error, or
+	/// another [`Error`] variant if the input is not well-formed JSON.
 	fn parse_in<C, E>(
 		parser: &mut Parser<C, E>,
 		context: Context,
@@ -249,6 +326,7 @@ pub struct Parser<C: Iterator<Item = Result<DecodedChar, E>>, E> {
 
 /// Checks if the given char `c` is a JSON whitespace.
 #[inline(always)]
+#[must_use]
 pub const fn is_whitespace(c: char) -> bool {
 	matches!(c, ' ' | '\t' | '\r' | '\n')
 }
@@ -282,7 +360,9 @@ impl<C: Iterator<Item = Result<DecodedChar, E>>, E> Parser<C, E> {
 
 	fn end_fragment(&mut self, i: usize) {
 		let entry_count = self.code_map.len();
-		let entry = self.code_map.get_mut(i).unwrap();
+		let Some(entry) = self.code_map.get_mut(i) else {
+			return;
+		};
 		entry.span.end = self.position;
 		entry.volume = entry_count - i;
 	}
@@ -335,7 +415,7 @@ impl<C: Iterator<Item = Result<DecodedChar, E>>, E> Parser<C, E> {
 
 /// Parse error.
 #[derive(Debug)]
-pub enum Error<E = core::convert::Infallible> {
+pub enum Error<E = Infallible> {
 	/// Stream error.
 	///
 	/// The first parameter is the byte index at which the error occurred.
@@ -354,12 +434,12 @@ pub enum Error<E = core::convert::Infallible> {
 	/// Missing low surrogate in a string.
 	///
 	/// The first parameter is the byte index at which the error occurred.
-	MissingLowSurrogate(Span, u16),
+	MissingLowSurrogate(Span, u32),
 
 	/// Invalid low surrogate in a string.
 	///
 	/// The first parameter is the span at which the error occurred.
-	InvalidLowSurrogate(Span, u16, u32),
+	InvalidLowSurrogate(Span, u32, u32),
 
 	/// UTF-8 encoding error.
 	InvalidUtf8(usize),
@@ -376,12 +456,10 @@ impl<E> Error<E> {
 	/// Returns the byte position at which the error occurred.
 	pub const fn position(&self) -> usize {
 		match self {
-			Self::Stream(p, _) => *p,
-			Self::Unexpected(p, _) => *p,
-			Self::InvalidUnicodeCodePoint(span, _) => span.start,
-			Self::MissingLowSurrogate(span, _) => span.start,
-			Self::InvalidLowSurrogate(span, _, _) => span.start,
-			Self::InvalidUtf8(p) => *p,
+			Self::Stream(p, _) | Self::Unexpected(p, _) | Self::InvalidUtf8(p) => *p,
+			Self::InvalidUnicodeCodePoint(span, _)
+			| Self::MissingLowSurrogate(span, _)
+			| Self::InvalidLowSurrogate(span, _, _) => span.start,
 		}
 	}
 
@@ -390,12 +468,10 @@ impl<E> Error<E> {
 	/// Errors that point at a single position return an empty span there.
 	pub fn span(&self) -> Span {
 		match self {
-			Self::Stream(p, _) => Span::new(*p, *p),
-			Self::Unexpected(p, _) => Span::new(*p, *p),
-			Self::InvalidUnicodeCodePoint(span, _) => *span,
-			Self::MissingLowSurrogate(span, _) => *span,
-			Self::InvalidLowSurrogate(span, _, _) => *span,
-			Self::InvalidUtf8(p) => Span::new(*p, *p),
+			Self::Stream(p, _) | Self::Unexpected(p, _) | Self::InvalidUtf8(p) => Span::new(*p, *p),
+			Self::InvalidUnicodeCodePoint(span, _)
+			| Self::MissingLowSurrogate(span, _)
+			| Self::InvalidLowSurrogate(span, _, _) => *span,
 		}
 	}
 }
@@ -403,12 +479,11 @@ impl<E> Error<E> {
 impl Error<utf8_decode::Utf8Error> {
 	const fn io_into_utf8(self) -> Error {
 		match self {
-			Self::Stream(p, _) => Error::InvalidUtf8(p),
+			Self::Stream(p, _) | Self::InvalidUtf8(p) => Error::InvalidUtf8(p),
 			Self::Unexpected(p, e) => Error::Unexpected(p, e),
 			Self::InvalidUnicodeCodePoint(s, e) => Error::InvalidUnicodeCodePoint(s, e),
 			Self::MissingLowSurrogate(s, e) => Error::MissingLowSurrogate(s, e),
 			Self::InvalidLowSurrogate(s, a, b) => Error::InvalidLowSurrogate(s, a, b),
-			Self::InvalidUtf8(p) => Error::InvalidUtf8(p),
 		}
 	}
 }
@@ -417,7 +492,7 @@ impl<E: fmt::Display> fmt::Display for Error<E> {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
 			Self::Stream(_, e) => e.fmt(f),
-			Self::Unexpected(_, Some(c)) => write!(f, "unexpected character `{}`", c),
+			Self::Unexpected(_, Some(c)) => write!(f, "unexpected character `{c}`"),
 			Self::Unexpected(_, None) => write!(f, "unexpected end of file"),
 			Self::InvalidUnicodeCodePoint(_, c) => write!(f, "invalid Unicode code point {:x}", *c),
 			Self::MissingLowSurrogate(_, _) => write!(f, "missing low surrogate"),
@@ -427,11 +502,15 @@ impl<E: fmt::Display> fmt::Display for Error<E> {
 	}
 }
 
-impl<E: 'static + std::error::Error> std::error::Error for Error<E> {
-	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+impl<E: 'static + StdError> StdError for Error<E> {
+	fn source(&self) -> Option<&(dyn StdError + 'static)> {
 		match self {
 			Self::Stream(_, e) => Some(e),
-			_ => None,
+			Self::Unexpected(..)
+			| Self::InvalidUnicodeCodePoint(..)
+			| Self::MissingLowSurrogate(..)
+			| Self::InvalidLowSurrogate(..)
+			| Self::InvalidUtf8(..) => None,
 		}
 	}
 }
@@ -456,6 +535,7 @@ pub enum Context {
 
 impl Context {
 	/// Checks if the given character `c` can follow a value in this context.
+	#[must_use]
 	pub const fn follows(&self, c: char) -> bool {
 		match self {
 			Self::None => is_whitespace(c),

@@ -2,6 +2,7 @@ use crate::number::{Buffer, InvalidNumber, Number, NumberBuf};
 use de::{Deserialize, Deserializer};
 use ser::{Serialize, Serializer};
 use serde::{de, forward_to_deserialize_any, ser};
+use std::error::Error as StdError;
 use std::{fmt, marker::PhantomData};
 
 /// Structure name used to serialize number with arbitrary precision.
@@ -89,7 +90,7 @@ impl<'de, B: Buffer> de::Visitor<'de> for Visitor<B> {
 			{
 				struct KeyVisitor;
 
-				impl<'de> de::Visitor<'de> for KeyVisitor {
+				impl de::Visitor<'_> for KeyVisitor {
 					type Value = Key;
 
 					fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
@@ -103,7 +104,7 @@ impl<'de, B: Buffer> de::Visitor<'de> for Visitor<B> {
 						if v == TOKEN {
 							Ok(Key)
 						} else {
-							Err(serde::de::Error::custom("expected field with custom name"))
+							Err(de::Error::custom("expected field with custom name"))
 						}
 					}
 				}
@@ -121,7 +122,7 @@ impl<'de, B: Buffer> de::Visitor<'de> for Visitor<B> {
 			{
 				struct ValueVisitor<B>(PhantomData<B>);
 
-				impl<'de, B: Buffer> de::Visitor<'de> for ValueVisitor<B> {
+				impl<B: Buffer> de::Visitor<'_> for ValueVisitor<B> {
 					type Value = Value<B>;
 
 					fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
@@ -142,7 +143,7 @@ impl<'de, B: Buffer> de::Visitor<'de> for Visitor<B> {
 						match NumberBuf::new(B::from_vec(v.into_bytes())) {
 							Ok(v) => Ok(Value(v)),
 							Err(InvalidNumber(bytes)) => Err(de::Error::custom(InvalidNumber(
-								String::from_utf8(bytes.as_ref().to_owned()).unwrap(),
+								String::from_utf8_lossy(bytes.as_ref()).into_owned(),
 							))),
 						}
 					}
@@ -172,7 +173,7 @@ impl fmt::Display for Unexpected {
 	}
 }
 
-impl std::error::Error for Unexpected {}
+impl StdError for Unexpected {}
 
 impl de::Error for Unexpected {
 	fn custom<T>(msg: T) -> Self
@@ -184,9 +185,9 @@ impl de::Error for Unexpected {
 
 	fn invalid_type(unexp: de::Unexpected, exp: &dyn de::Expected) -> Self {
 		if let de::Unexpected::Unit = unexp {
-			Self::custom(format_args!("invalid type: null, expected {}", exp))
+			Self::custom(format_args!("invalid type: null, expected {exp}"))
 		} else {
-			Self::custom(format_args!("invalid type: {}, expected {}", unexp, exp))
+			Self::custom(format_args!("invalid type: {unexp}, expected {exp}"))
 		}
 	}
 }
@@ -197,7 +198,7 @@ impl<'de, B: Buffer> Deserializer<'de> for NumberBuf<B> {
 	#[inline(always)]
 	fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
 	where
-		V: serde::de::Visitor<'de>,
+		V: de::Visitor<'de>,
 	{
 		self.as_number().deserialize_any(visitor)
 	}
@@ -215,7 +216,7 @@ impl<'de, B: Buffer> Deserializer<'de> for &NumberBuf<B> {
 	#[inline(always)]
 	fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
 	where
-		V: serde::de::Visitor<'de>,
+		V: de::Visitor<'de>,
 	{
 		self.as_number().deserialize_any(visitor)
 	}
@@ -233,7 +234,7 @@ impl<'de> Deserializer<'de> for &Number {
 	#[inline(always)]
 	fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
 	where
-		V: serde::de::Visitor<'de>,
+		V: de::Visitor<'de>,
 	{
 		if let Some(u) = self.as_u64() {
 			visitor.visit_u64(u)

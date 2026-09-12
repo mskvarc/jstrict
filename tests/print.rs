@@ -1,69 +1,71 @@
+use core::fmt::Write as _;
+use core::str;
 use jstrict::{Parse, Print, json};
 
 #[test]
 fn print_01() {
 	let value = json! { null };
-	assert_eq!(value.pretty_print().to_string(), "null")
+	assert_eq!(value.pretty_print().to_string(), "null");
 }
 
 #[test]
 fn print_02() {
 	let value = json! { true };
-	assert_eq!(value.pretty_print().to_string(), "true")
+	assert_eq!(value.pretty_print().to_string(), "true");
 }
 
 #[test]
 fn print_03() {
 	let value = json! { false };
-	assert_eq!(value.pretty_print().to_string(), "false")
+	assert_eq!(value.pretty_print().to_string(), "false");
 }
 
 #[test]
 fn print_04() {
 	let value = json! { "foo" };
-	assert_eq!(value.pretty_print().to_string(), "\"foo\"")
+	assert_eq!(value.pretty_print().to_string(), "\"foo\"");
 }
 
 #[test]
 fn print_05() {
 	let value = json! { 1 };
-	assert_eq!(value.pretty_print().to_string(), "1")
+	assert_eq!(value.pretty_print().to_string(), "1");
 }
 
 #[test]
 fn print_06() {
 	let value = json! { [] };
-	assert_eq!(value.pretty_print().to_string(), "[]")
+	assert_eq!(value.pretty_print().to_string(), "[]");
 }
 
 #[test]
 fn print_07() {
 	let value = json! { [ null ] };
-	assert_eq!(value.pretty_print().to_string(), "[ null ]")
+	assert_eq!(value.pretty_print().to_string(), "[ null ]");
 }
 
 #[test]
 fn print_08() {
 	let value = json! { [ "azertyuiop" ] };
-	assert_eq!(value.pretty_print().to_string(), "[ \"azertyuiop\" ]")
+	assert_eq!(value.pretty_print().to_string(), "[ \"azertyuiop\" ]");
 }
 
 #[test]
 fn print_09() {
 	let value = json! { [ "azertyuiopq" ] };
-	assert_eq!(value.pretty_print().to_string(), "[\n  \"azertyuiopq\"\n]")
+	assert_eq!(value.pretty_print().to_string(), "[\n  \"azertyuiopq\"\n]");
 }
 
 #[test]
 fn print_10() {
 	let value = json! { [ true, false ] };
-	assert_eq!(value.pretty_print().to_string(), "[\n  true,\n  false\n]")
+	assert_eq!(value.pretty_print().to_string(), "[\n  true,\n  false\n]");
 }
 
 #[test]
 fn print_11() {
 	let value = json! { { "a": null } };
-	assert_eq!(value.pretty_print().to_string(), "{ \"a\": null }")
+	assert_eq!(value.pretty_print().to_string(), "{ \"a\": null }");
 }
 
 #[test]
@@ -72,7 +74,7 @@ fn print_12() {
 	assert_eq!(
 		value.pretty_print().to_string(),
 		"{\n  \"a\": null,\n  \"b\": 12\n}"
-	)
+	);
 }
 
 #[test]
@@ -81,7 +83,7 @@ fn print_13() {
 	assert_eq!(
 		value.pretty_print().to_string(),
 		"{\n  \"a\": [ null ],\n  \"b\": [ 13 ]\n}"
-	)
+	);
 }
 
 #[test]
@@ -90,7 +92,7 @@ fn print_14() {
 	assert_eq!(
 		value.pretty_print().to_string(),
 		"{\n  \"a\": [\n    null,\n    []\n  ],\n  \"b\": [ 14 ]\n}"
-	)
+	);
 }
 
 fn manual_escape(s: &str) -> String {
@@ -129,7 +131,7 @@ fn manual_escape(s: &str) -> String {
 				i += 1;
 			}
 			c if c < 0x20 => {
-				out.push_str(&format!("\\u00{:02x}", c));
+				let _ = write!(out, "\\u00{c:02x}");
 				i += 1;
 			}
 			_ => {
@@ -144,7 +146,7 @@ fn manual_escape(s: &str) -> String {
 				} else {
 					4
 				};
-				out.push_str(std::str::from_utf8(&bytes[i..i + n]).unwrap());
+				out.push_str(str::from_utf8(&bytes[i..i + n]).unwrap_or(""));
 				i += n;
 			}
 		}
@@ -185,7 +187,7 @@ fn print_simd_threshold_boundary() {
 	// output for the same content.
 	let base = "abc\nXYZ\\\"def"; // forces escapes early
 	let pad = "x".repeat(63 - base.len());
-	let s63: String = format!("{}{}", base, pad);
+	let s63: String = format!("{base}{pad}");
 	let s64: String = format!("{}{}", s63, "x");
 	assert_eq!(s63.len(), 63);
 	assert_eq!(s64.len(), 64);

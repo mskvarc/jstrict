@@ -1,7 +1,9 @@
 use super::{Entry, Key};
 use core::hash::{BuildHasher, Hash};
+use core::mem;
 use hashbrown::hash_table::Entry as TableEntry;
 use hashbrown::{DefaultHashBuilder, HashTable};
+use std::borrow::Borrow;
 
 /// Key lookup equivalence.
 ///
@@ -15,7 +17,7 @@ pub trait Equivalent<K: ?Sized> {
 
 impl<Q: ?Sized + Eq, K: ?Sized> Equivalent<K> for Q
 where
-	K: std::borrow::Borrow<Q>,
+	K: Borrow<Q>,
 {
 	fn equivalent(&self, key: &K) -> bool {
 		self == key.borrow()
@@ -86,11 +88,11 @@ impl Indexes {
 	fn insert(&mut self, mut index: usize) {
 		if index != self.rep {
 			if index < self.rep {
-				core::mem::swap(&mut index, &mut self.rep);
+				mem::swap(&mut index, &mut self.rep);
 			}
 
 			if let Err(i) = self.other.binary_search(&index) {
-				self.other.insert(i, index)
+				self.other.insert(i, index);
 			}
 		}
 	}
@@ -119,12 +121,12 @@ impl Indexes {
 	/// Decreases all index greater than `index` by one.
 	pub fn shift_down(&mut self, index: usize) {
 		if self.rep > index {
-			self.rep -= 1
+			self.rep -= 1;
 		}
 
 		for i in &mut self.other {
 			if *i > index {
-				*i -= 1
+				*i -= 1;
 			}
 		}
 	}
@@ -132,12 +134,12 @@ impl Indexes {
 	/// Increases all index greater than or equal to `index` by one.
 	pub fn shift_up(&mut self, index: usize) {
 		if self.rep >= index {
-			self.rep += 1
+			self.rep += 1;
 		}
 
 		for i in &mut self.other {
 			if *i >= index {
-				*i += 1
+				*i += 1;
 			}
 		}
 	}
@@ -270,14 +272,14 @@ impl<S: BuildHasher> IndexMap<S> {
 
 	/// Decreases all index greater than `index` by one everywhere in the table.
 	pub fn shift_down(&mut self, index: usize) {
-		for indexes in self.table.iter_mut() {
+		for indexes in &mut self.table {
 			indexes.shift_down(index);
 		}
 	}
 
 	/// Increases all index greater than or equal to `index` by one everywhere in the table.
 	pub fn shift_up(&mut self, index: usize) {
-		for indexes in self.table.iter_mut() {
+		for indexes in &mut self.table {
 			indexes.shift_up(index);
 		}
 	}
@@ -342,7 +344,7 @@ mod tests {
 		assert_eq!(a.next(), None);
 		assert_eq!(b.next(), Some(1));
 		assert_eq!(b.next(), None);
-		assert_eq!(indexes.get(&entries, "c"), None)
+		assert_eq!(indexes.get(&entries, "c"), None);
 	}
 
 	#[test]
@@ -365,7 +367,7 @@ mod tests {
 
 		assert_eq!(a.next(), Some(2));
 		assert_eq!(a.next(), None);
-		assert_eq!(indexes.get(&entries, "b"), None)
+		assert_eq!(indexes.get(&entries, "b"), None);
 	}
 
 	#[test]
@@ -386,6 +388,6 @@ mod tests {
 		indexes.remove(&entries, 2);
 
 		assert_eq!(indexes.get(&entries, "a"), None);
-		assert_eq!(indexes.get(&entries, "b"), None)
+		assert_eq!(indexes.get(&entries, "b"), None);
 	}
 }
