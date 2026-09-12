@@ -18,8 +18,8 @@
 //!   [`Number`].
 //! - Duplicate entries are preserved: an [`Object`] is a list of entries in
 //!   definition order, with an index for `O(1)` lookup.
-//! - Short strings, keys and numbers live on the stack (see
-//!   [`SMALL_STRING_CAPACITY`]).
+//! - Short strings and keys live inline on the stack, and so do numbers up
+//!   to [`NUMBER_CAPACITY`] bytes.
 //! - Highly configurable printing, see [`Print`] and [`print::Options`].
 //! - [`json!`] builds any value from a JSON literal.
 //!
@@ -64,6 +64,7 @@
 
 pub mod number;
 pub use crate::number::{InvalidNumber, Number, Sign, TryFromFloatError};
+use compact_str::CompactString;
 use smallvec::SmallVec;
 use std::{fmt, str::FromStr};
 
@@ -96,14 +97,12 @@ pub use self::serde::*;
 
 pub use unordered::*;
 
-/// String stack capacity.
-///
-/// If a string is longer than this value,
-/// it will be stored on the heap.
-pub const SMALL_STRING_CAPACITY: usize = 16;
-
 /// String.
-pub type String = smallstr::SmallString<[u8; SMALL_STRING_CAPACITY]>;
+///
+/// Strings short enough to fit inline are stored on the stack; longer ones
+/// spill to the heap. The inline capacity is `compact_str`'s own, one word
+/// short of three pointers, and is not configurable.
+pub type String = CompactString;
 
 pub use array::Array;
 
@@ -113,7 +112,7 @@ pub use object::Object;
 ///
 /// If the number is longer than this value,
 /// it will be stored on the heap.
-pub const NUMBER_CAPACITY: usize = SMALL_STRING_CAPACITY;
+pub const NUMBER_CAPACITY: usize = 16;
 
 /// Number buffer.
 pub type NumberBuf = crate::number::SmallNumberBuf<NUMBER_CAPACITY>;

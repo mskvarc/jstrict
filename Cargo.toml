@@ -1,7 +1,7 @@
 [package]
 name = "jstrict"
 description = "Strict RFC 8259 / ECMA-404 JSON parser with source code mapping"
-version = "0.14.0"
+version = "0.15.0"
 edition = "2024"
 rust-version = "1.96.0"
 authors = [
@@ -24,7 +24,7 @@ canonicalize = ["dep:ryu-js"]
 # `contextual::WithContext` printing adapters.
 contextual = ["dep:contextual"]
 # `Serialize` / `Deserialize` for `Value`, `Object`, `Number`.
-serde = ["dep:serde", "smallstr/serde"]
+serde = ["dep:serde", "compact_str/serde"]
 # Conversion from/to `serde_json::Value`.
 serde_json = ["dep:serde_json"]
 # SIMD-accelerated UTF-8 validation in the slice parser.
@@ -40,6 +40,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 bench = false
 
 [dependencies]
+compact_str = "0.10.0"
 contextual = { version = "0.1.6", optional = true }
 decoded-char = "0.1.1"
 hashbrown = "0.17.1"
@@ -51,7 +52,6 @@ ryu-js = { version = "1.0.3", optional = true }
 serde = { version = "1.0.229", optional = true }
 serde_json = { version = "1.0.151", optional = true }
 simdutf8 = { version = "0.1.5", optional = true }
-smallstr = "0.3.1"
 smallvec = "1.15.2"
 sonic-rs = { version = "0.5.8", optional = true }
 utf8-decode = "2.0.0"

@@ -1,5 +1,5 @@
+use compact_str::CompactString;
 use serde::{Serialize, ser::Impossible};
-use smallstr::SmallString;
 use std::fmt;
 
 use super::NUMBER_TOKEN;
@@ -152,7 +152,7 @@ impl serde::Serializer for Serializer {
 
 	#[inline(always)]
 	fn serialize_char(self, v: char) -> Result<Self::Ok, Self::Error> {
-		let mut s = SmallString::new();
+		let mut s = CompactString::const_new("");
 		s.push(v);
 		Ok(Value::String(s))
 	}
@@ -561,7 +561,7 @@ impl serde::Serializer for KeySerializer {
 
 	#[inline]
 	fn serialize_char(self, value: char) -> Result<Self::Ok, Self::Error> {
-		let mut s = Key::new();
+		let mut s = Key::const_new("");
 		s.push(value);
 		Ok(s)
 	}

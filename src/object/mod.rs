@@ -7,6 +7,7 @@
 //! picking one.
 use crate::code_map::Mapped;
 use crate::{CodeMap, FragmentRef, UnorderedEq, UnorderedPartialEq, Value};
+use compact_str::CompactString;
 use core::cmp::Ordering;
 use core::fmt;
 use core::hash::{Hash, Hasher};
@@ -16,14 +17,11 @@ mod index_map;
 pub use index_map::Equivalent;
 use index_map::IndexMap;
 
-/// Object key stack capacity.
-///
-/// If the key is longer than this value,
-/// it will be stored on the heap.
-pub const KEY_CAPACITY: usize = 16;
-
 /// Object key.
-pub type Key = smallstr::SmallString<[u8; KEY_CAPACITY]>;
+///
+/// Keys short enough to fit inline are stored on the stack; longer ones spill
+/// to the heap. Same representation as [`crate::String`].
+pub type Key = CompactString;
 
 /// Object entry.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]

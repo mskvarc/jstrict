@@ -218,7 +218,7 @@ impl<'a, M: Mapper> SliceParser<'a, M> {
 				}
 				if bytes[end] == b'"' {
 					let s = self.validate_str_slice(start, end)?;
-					let out = JsonString::from_str(s);
+					let out = JsonString::new(s);
 					self.pos = end + 1;
 					Ok(out)
 				} else {
@@ -234,7 +234,12 @@ impl<'a, M: Mapper> SliceParser<'a, M> {
 		start: usize,
 		first_escape: usize,
 	) -> Result<JsonString, Error> {
-		let mut out = JsonString::new();
+		// The unescaped text is assembled in a plain `String` rather than
+		// directly in a `CompactString`: the latter checks its inline-vs-heap
+		// discriminant on every `push`/`push_str`, which dominates a per-byte
+		// escape loop. The final `CompactString::new` inlines a short result
+		// and copies a long one once.
+		let mut out = String::new();
 		if first_escape > start {
 			let prefix = self.validate_str_slice(start, first_escape)?;
 			out.push_str(prefix);
@@ -278,7 +283,7 @@ impl<'a, M: Mapper> SliceParser<'a, M> {
 						}
 					}
 					self.pos += 1;
-					return Ok(out);
+					return Ok(JsonString::new(out.as_str()));
 				}
 				Some(b'\\') => {
 					self.pos += 1;
@@ -429,7 +434,7 @@ impl<'a, M: Mapper> SliceParser<'a, M> {
 			return Err(Error::Unexpected(i, self.char_at(i)));
 		}
 		self.pos = i;
-		let buf: smallvec::SmallVec<[u8; crate::SMALL_STRING_CAPACITY]> =
+		let buf: smallvec::SmallVec<[u8; crate::NUMBER_CAPACITY]> =
 			smallvec::SmallVec::from_slice(&bytes[start..i]);
 		// SAFETY: the fast path consumed a valid JSON integer.
 		Ok(unsafe { NumberBuf::new_unchecked(buf) })
@@ -534,7 +539,7 @@ impl<'a, M: Mapper> SliceParser<'a, M> {
 		}
 
 		self.pos = i;
-		let buf: smallvec::SmallVec<[u8; crate::SMALL_STRING_CAPACITY]> =
+		let buf: smallvec::SmallVec<[u8; crate::NUMBER_CAPACITY]> =
 			smallvec::SmallVec::from_slice(&bytes[start..i]);
 		// SAFETY: the state machine guarantees a valid JSON number.
 		Ok(unsafe { NumberBuf::new_unchecked(buf) })

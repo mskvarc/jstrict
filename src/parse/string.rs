@@ -1,7 +1,7 @@
 use super::{Context, Error, Parse, Parser};
+use compact_str::CompactString;
 use decoded_char::DecodedChar;
 use locspan::Span;
-use smallstr::SmallString;
 
 fn is_control(c: char) -> bool {
 	('\u{0000}'..='\u{001f}').contains(&c)
@@ -38,7 +38,7 @@ where
 	}
 }
 
-impl<A: smallvec::Array<Item = u8>> Parse for SmallString<A> {
+impl Parse for CompactString {
 	fn parse_in<C, E>(
 		parser: &mut Parser<C, E>,
 		_context: Context,
@@ -49,7 +49,10 @@ impl<A: smallvec::Array<Item = u8>> Parse for SmallString<A> {
 		let i = parser.begin_fragment();
 		match parser.next_char()? {
 			(_, Some('"')) => {
-				let mut result = Self::new();
+				// Assemble in a plain `String`, then build the `CompactString`
+				// once: a `CompactString` pays an inline-vs-heap check on every
+				// `push`, which dominates this per-character loop.
+				let mut result = String::new();
 				let mut high_surrogate: Option<(usize, u32)> = None;
 				loop {
 					let c = match parser.next_char()? {
@@ -66,7 +69,7 @@ impl<A: smallvec::Array<Item = u8>> Parse for SmallString<A> {
 							}
 
 							parser.end_fragment(i);
-							break Ok((result, i));
+							break Ok((Self::new(result.as_str()), i));
 						}
 						(_, Some('\\')) => match parser.next_char()? {
 							(_, Some(c @ ('"' | '\\' | '/'))) => c,

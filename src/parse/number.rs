@@ -1,5 +1,5 @@
 use super::{Context, Error, Parse, Parser};
-use crate::{NumberBuf, SMALL_STRING_CAPACITY};
+use crate::{NUMBER_CAPACITY, NumberBuf};
 use decoded_char::DecodedChar;
 use smallvec::SmallVec;
 
@@ -12,7 +12,7 @@ impl Parse for NumberBuf {
 		C: Iterator<Item = Result<DecodedChar, E>>,
 	{
 		let i = parser.begin_fragment();
-		let mut buffer: SmallVec<[u8; SMALL_STRING_CAPACITY]> = SmallVec::new();
+		let mut buffer: SmallVec<[u8; NUMBER_CAPACITY]> = SmallVec::new();
 
 		enum State {
 			Init,
