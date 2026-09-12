@@ -157,17 +157,17 @@ impl Object {
 
 	/// Returns the number of entries this object can hold without
 	/// reallocating.
-	pub fn capacity(&self) -> usize {
+	pub const fn capacity(&self) -> usize {
 		self.entries.capacity()
 	}
 
 	/// Returns the number of entries in this object, duplicates included.
-	pub fn len(&self) -> usize {
+	pub const fn len(&self) -> usize {
 		self.entries.len()
 	}
 
 	/// Checks if this object has no entries.
-	pub fn is_empty(&self) -> bool {
+	pub const fn is_empty(&self) -> bool {
 		self.entries.is_empty()
 	}
 
@@ -764,14 +764,14 @@ impl Object {
 	/// If one or more entries are already matching the given key,
 	/// all of them are removed and returned in the resulting iterator.
 	pub fn insert_front(&mut self, key: Key, value: Value) -> RemovedByInsertFront<'_> {
-		if let Some(first) = self.entries.first_mut() {
-			if first.key == key {
-				let first = core::mem::replace(first, Entry::new(key, value));
-				return RemovedByInsertFront {
-					first: Some(first),
-					object: self,
-				};
-			}
+		if let Some(first) = self.entries.first_mut()
+			&& first.key == key
+		{
+			let first = core::mem::replace(first, Entry::new(key, value));
+			return RemovedByInsertFront {
+				first: Some(first),
+				object: self,
+			};
 		}
 
 		self.push_front(key, value);

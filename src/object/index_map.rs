@@ -63,7 +63,7 @@ impl Indexes {
 		}
 	}
 
-	pub fn len(&self) -> usize {
+	pub const fn len(&self) -> usize {
 		1 + self.other.len()
 	}
 
@@ -71,7 +71,7 @@ impl Indexes {
 		self.rep
 	}
 
-	pub fn is_redundant(&self) -> bool {
+	pub const fn is_redundant(&self) -> bool {
 		!self.other.is_empty()
 	}
 
@@ -261,10 +261,10 @@ impl<S: BuildHasher> IndexMap<S> {
 	pub fn remove(&mut self, entries: &[Entry], index: usize) {
 		let key = &entries[index].key;
 		let hash = self.hash_builder.hash_one(key);
-		if let Ok(mut occupied) = self.table.find_entry(hash, equivalent_key(entries, key)) {
-			if !occupied.get_mut().remove(index) {
-				occupied.remove();
-			}
+		if let Ok(mut occupied) = self.table.find_entry(hash, equivalent_key(entries, key))
+			&& !occupied.get_mut().remove(index)
+		{
+			occupied.remove();
 		}
 	}
 

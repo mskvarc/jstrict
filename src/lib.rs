@@ -292,7 +292,7 @@ impl Value {
 
 	/// Checks if the value is either an empty array or an empty object.
 	#[inline]
-	pub fn is_empty_array_or_object(&self) -> bool {
+	pub const fn is_empty_array_or_object(&self) -> bool {
 		match self {
 			Self::Array(a) => a.is_empty(),
 			Self::Object(o) => o.is_empty(),

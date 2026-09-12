@@ -142,7 +142,7 @@ impl<'a, M: Mapper> SliceParser<'a, M> {
 	}
 
 	#[inline]
-	fn skip_whitespace(&mut self) {
+	const fn skip_whitespace(&mut self) {
 		let bytes = self.input;
 		let mut i = self.pos;
 		while i < bytes.len() {
