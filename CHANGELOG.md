@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.16.0] - 2026-10-06
+
+### 🚀 Features
+- stack-safe drop and printing ⚠️ **BREAKING**
+
 ## [v0.15.0] - 2026-09-12
 
 ### 🐛 Bug Fixes
@@ -11,6 +16,7 @@ All notable changes to this project will be documented in this file.
 - switch to compact_str
 
 ### 🧹 Chores
+- update changelog
 - update deps
 - make clippy stricter
 - add rustfmt config
