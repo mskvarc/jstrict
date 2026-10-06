@@ -1,4 +1,4 @@
-use crate::{Object, Value, object::Entry};
+use crate::{Array, Object, Value, object::Entry};
 
 impl Value {
 	/// Converts a [`serde_json::Value`] into a `Value`.
@@ -26,7 +26,7 @@ impl Value {
 			serde_json::Value::Number(n) => Self::Number(n.into()),
 			serde_json::Value::String(s) => Self::String(s.into()),
 			serde_json::Value::Array(a) => {
-				let mut out = Vec::with_capacity(a.len());
+				let mut out = Array::with_capacity(a.len());
 				for v in a {
 					out.push(Self::from_serde_json(v));
 				}

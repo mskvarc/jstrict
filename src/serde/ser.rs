@@ -7,8 +7,11 @@ use std::error::Error as StdError;
 use std::fmt;
 
 use super::NUMBER_TOKEN;
-use crate::{Array, NumberBuf, Object, Value, object::Key};
+use crate::{Array, NumberBuf, Object, Value, native_stack::on_sufficient_stack, object::Key};
 
+/// Recurses once per nesting level; each level runs through
+/// [`on_sufficient_stack`], so serializing a value of any depth needs only
+/// [`RED_ZONE`](crate::native_stack::RED_ZONE) of the caller's stack.
 impl Serialize for Value {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where
@@ -19,7 +22,7 @@ impl Serialize for Value {
 			Self::Boolean(b) => serializer.serialize_bool(*b),
 			Self::Number(n) => n.serialize(serializer),
 			Self::String(s) => serializer.serialize_str(s),
-			Self::Array(a) => {
+			Self::Array(a) => on_sufficient_stack(|| {
 				use ser::SerializeSeq;
 				let mut seq = serializer.serialize_seq(Some(a.len()))?;
 
@@ -28,8 +31,8 @@ impl Serialize for Value {
 				}
 
 				seq.end()
-			}
-			Self::Object(o) => o.serialize(serializer),
+			}),
+			Self::Object(o) => on_sufficient_stack(|| o.serialize(serializer)),
 		}
 	}
 }
@@ -236,7 +239,7 @@ impl serde::Serializer for Serializer {
 	#[inline(always)]
 	fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
 		Ok(SerializeArray {
-			array: Vec::with_capacity(len.unwrap_or(0)),
+			array: Array::with_capacity(len.unwrap_or(0)),
 		})
 	}
 
@@ -263,7 +266,7 @@ impl serde::Serializer for Serializer {
 	) -> Result<Self::SerializeTupleVariant, Self::Error> {
 		Ok(SerializeTupleVariant {
 			name: variant.into(),
-			array: Vec::with_capacity(len),
+			array: Array::with_capacity(len),
 		})
 	}
 

@@ -248,11 +248,11 @@ macro_rules! json {
 	};
 
 	([]) => {
-		$crate::Value::Array(json_vec![])
+		$crate::Value::Array($crate::Array::new())
 	};
 
 	([ $($tt:tt)+ ]) => {
-		$crate::Value::Array(json!(@array [] $($tt)+))
+		$crate::Value::Array($crate::Array::from(json!(@array [] $($tt)+)))
 	};
 
 	({}) => {

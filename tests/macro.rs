@@ -36,7 +36,7 @@ fn macro_04() {
 		[]
 	};
 
-	assert_eq!(value, Value::Array(vec![]));
+	assert_eq!(value, Value::Array(vec![].into()));
 }
 
 #[test]
@@ -54,7 +54,7 @@ fn macro_06() {
 		[ null ]
 	};
 
-	assert_eq!(value, Value::Array(vec![Value::Null]));
+	assert_eq!(value, Value::Array(vec![Value::Null].into()));
 }
 
 #[test]
@@ -76,7 +76,7 @@ fn macro_08() {
 		[ item ]
 	};
 
-	assert_eq!(value, Value::Array(vec![Value::Null]));
+	assert_eq!(value, Value::Array(vec![Value::Null].into()));
 }
 
 #[test]
@@ -87,11 +87,14 @@ fn macro_09() {
 
 	assert_eq!(
 		value,
-		Value::Array(vec![
-			Value::Array(vec![Value::Null]),
-			Value::Boolean(true),
-			Value::Boolean(false)
-		])
+		Value::Array(
+			vec![
+				Value::Array(vec![Value::Null].into()),
+				Value::Boolean(true),
+				Value::Boolean(false)
+			]
+			.into()
+		)
 	);
 }
 

@@ -12,8 +12,9 @@
 //!
 //! - Strict by default; the [`parse::Options`] type relaxes surrogate and
 //!   codepoint handling for documents that do not adhere to the standard.
-//! - No stack overflow: nesting depth is bounded by available memory, not by
-//!   the call stack.
+//! - No stack overflow: parsing and dropping a value of any depth are bounded
+//!   by available memory, not by the call stack, and printing and serializing
+//!   run each nesting level on sufficient native stack (see [`native_stack`]).
 //! - Numbers are stored in lexical form, so precision is never lost. See
 //!   [`Number`].
 //! - Duplicate entries are preserved: an [`Object`] is a list of entries in
@@ -81,6 +82,8 @@ use std::{fmt, str::FromStr};
 pub mod array;
 pub(crate) mod byte_scan;
 pub mod code_map;
+mod dismantle;
+pub mod native_stack;
 pub mod object;
 pub mod parse;
 mod unordered;
@@ -673,6 +676,12 @@ impl<'s> From<&'s str> for Value {
 impl From<Array> for Value {
 	fn from(a: Array) -> Self {
 		Self::Array(a)
+	}
+}
+
+impl From<Vec<Self>> for Value {
+	fn from(items: Vec<Self>) -> Self {
+		Self::Array(items.into())
 	}
 }
 

@@ -1,4 +1,4 @@
-use crate::{Object, Value, object::Entry};
+use crate::{Array, Object, Value, object::Entry};
 use sonic_rs::value::ValueRef;
 
 impl Value {
@@ -27,7 +27,7 @@ impl Value {
 			ValueRef::Number(n) => Self::Number(n.into()),
 			ValueRef::String(s) => Self::String(s.into()),
 			ValueRef::Array(a) => {
-				let mut out = Vec::with_capacity(a.len());
+				let mut out = Array::with_capacity(a.len());
 				for v in a {
 					out.push(Self::from_sonic_rs(v));
 				}

@@ -43,7 +43,7 @@ fn bench_macros(c: &mut Criterion) {
 			black_box(json!({
 				"id": Value::from(id),
 				"name": Value::from(name),
-				"scores": Value::Array(scores_v),
+				"scores": Value::Array(scores_v.into()),
 			}))
 		});
 	});

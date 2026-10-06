@@ -6,7 +6,7 @@
 use core::ptr;
 use lexical::format::JSON;
 use smallvec::SmallVec;
-use std::borrow::{Borrow, ToOwned};
+use std::borrow::{Borrow, Cow, ToOwned};
 use std::error::Error as StdError;
 use std::fmt;
 use std::ops::Deref;
@@ -211,24 +211,41 @@ impl Number {
 
 	/// Strips insignificant trailing zeros from the fraction part.
 	///
-	/// `1.10000` becomes `1.1`, `1.0` becomes `1`. The exponent part, if any,
-	/// is left untouched.
+	/// `1.10000` becomes `1.1`, `1.0` becomes `1`, `1.50e10` becomes
+	/// `1.5e10`. The exponent part, if any, is left untouched. The result
+	/// borrows `self` unless zeros had to be removed from before an exponent.
 	#[must_use]
-	pub fn trimmed(&self) -> &Self {
-		let mut end = 1;
-		let mut i = 1;
-		let mut fractional_part = false;
-		while i < self.data.len() {
-			match self.data[i] {
-				b'0' if fractional_part => (),
-				b'.' => fractional_part = true,
-				_ => end = i + 1,
-			}
-
-			i += 1;
+	pub fn trimmed(&self) -> Cow<'_, Self> {
+		let data = &self.data;
+		let exponent = data
+			.iter()
+			.position(|byte| matches!(byte, b'e' | b'E'))
+			.unwrap_or(data.len());
+		let mantissa = &data[..exponent];
+		let Some(dot) = mantissa.iter().position(|byte| *byte == b'.') else {
+			return Cow::Borrowed(self);
+		};
+		let mut end = mantissa.len();
+		while end > dot + 1 && mantissa[end - 1] == b'0' {
+			end -= 1;
 		}
-
-		unsafe { Self::new_unchecked(&self.data[0..end]) }
+		if end == dot + 1 {
+			end = dot;
+		}
+		if end == exponent {
+			Cow::Borrowed(self)
+		} else if exponent == data.len() {
+			// safe because a valid number cut after its last significant
+			// fraction digit, or before its dot, is a valid number.
+			Cow::Borrowed(unsafe { Self::new_unchecked(&data[..end]) })
+		} else {
+			let mut bytes = Vec::with_capacity(end + data.len() - exponent);
+			bytes.extend_from_slice(&mantissa[..end]);
+			bytes.extend_from_slice(&data[exponent..]);
+			// safe because the trimmed mantissa and the untouched exponent of
+			// a valid number form a valid number.
+			Cow::Owned(unsafe { NumberBuf::new_unchecked(bytes) })
+		}
 	}
 
 	/// Checks if the number is equal to zero (`0`).
@@ -410,7 +427,7 @@ impl Number {
 		let Ok(n) = <NumberBuf as TryFrom<f32>>::try_from(f) else {
 			return None;
 		};
-		if n.as_number() == self.trimmed() {
+		if n.as_number() == &*self.trimmed() {
 			Some(f)
 		} else {
 			None
@@ -762,7 +779,7 @@ mod tests {
 	fn trimming_test(a: &str, b: &str) {
 		let a = Number::new(a).unwrap();
 		let b = Number::new(b).unwrap();
-		assert_eq!(a.trimmed(), b);
+		assert_eq!(&*a.trimmed(), b);
 	}
 
 	#[test]
@@ -775,6 +792,17 @@ mod tests {
 		trimming_test("1.10000", "1.1");
 		trimming_test("100.0", "100");
 		trimming_test("100.1000", "100.1");
+	}
+
+	#[test]
+	fn number_trimmed_keeps_every_exponent_digit() {
+		trimming_test("1.5e10", "1.5e10");
+		trimming_test("1.50e10", "1.5e10");
+		trimming_test("2.0E+30", "2E+30");
+		trimming_test("100", "100");
+		trimming_test("1.0", "1");
+		trimming_test("1e100", "1e100");
+		trimming_test("-0.250E-7", "-0.25E-7");
 	}
 
 	macro_rules! positive_tests {

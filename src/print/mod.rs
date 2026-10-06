@@ -12,6 +12,7 @@
 //! Strings are escaped per
 //! [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785#name-serialization-of-strings).
 use crate::byte_scan::find_escape;
+use crate::native_stack::on_sufficient_stack;
 use core::str;
 use std::cell::RefCell;
 use std::fmt;
@@ -278,6 +279,11 @@ impl Size {
 }
 
 /// Print methods.
+///
+/// Printing a [`Value`](crate::Value) recurses once per nesting level; each
+/// level runs through [`on_sufficient_stack`], so printing a value of any
+/// depth needs only [`RED_ZONE`](crate::native_stack::RED_ZONE) of the
+/// caller's stack.
 pub trait Print {
 	/// Print the value with `Options::pretty` options.
 	#[inline(always)]
@@ -322,6 +328,9 @@ impl<T: Print + ?Sized> Print for &T {
 /// Implemented by the value types that can be expanded over several lines.
 /// `sizes` holds the layout decisions produced by [`PrecomputeSize`], in
 /// depth-first order, and `index` walks through them as printing proceeds.
+///
+/// Recurses once per nesting level; each level runs through
+/// [`on_sufficient_stack`].
 pub trait PrintWithSize {
 	/// Writes the value to `f`, taking its layout from `sizes[*index]`.
 	/// # Errors
@@ -680,6 +689,9 @@ impl PrintWithSize for crate::Object {
 ///
 /// Implementations push one [`Size`] per array/object encountered, in
 /// depth-first order, and return the size of the value itself.
+///
+/// Recurses once per nesting level; each level runs through
+/// [`on_sufficient_stack`].
 pub trait PrecomputeSize {
 	/// Computes the printed size of this value, appending the size of each
 	/// nested array and object to `sizes`.
@@ -704,12 +716,16 @@ impl PrecomputeSize for crate::Value {
 			crate::Value::Boolean(b) => b.pre_compute_size(options, sizes),
 			crate::Value::Number(n) => Size::Width(n.as_str().len()),
 			crate::Value::String(s) => Size::Width(printed_string_size(s)),
-			crate::Value::Array(a) => pre_compute_array_size(a, options, sizes),
-			crate::Value::Object(o) => pre_compute_object_size(
-				o.iter().map(|e| (e.key.as_str(), &e.value)),
-				options,
-				sizes,
-			),
+			crate::Value::Array(a) => {
+				on_sufficient_stack(|| pre_compute_array_size(a, options, sizes))
+			}
+			crate::Value::Object(o) => on_sufficient_stack(|| {
+				pre_compute_object_size(
+					o.iter().map(|e| (e.key.as_str(), &e.value)),
+					options,
+					sizes,
+				)
+			}),
 		}
 	}
 }
@@ -880,8 +896,12 @@ impl PrintWithSize for crate::Value {
 			Self::Boolean(b) => b.fmt_with(f, options, indent),
 			Self::Number(n) => n.fmt_with(f, options, indent),
 			Self::String(s) => s.fmt_with(f, options, indent),
-			Self::Array(a) => a.fmt_with_size(f, options, indent, sizes, index),
-			Self::Object(o) => o.fmt_with_size(f, options, indent, sizes, index),
+			Self::Array(a) => {
+				on_sufficient_stack(|| a.fmt_with_size(f, options, indent, sizes, index))
+			}
+			Self::Object(o) => {
+				on_sufficient_stack(|| o.fmt_with_size(f, options, indent, sizes, index))
+			}
 		}
 	}
 }

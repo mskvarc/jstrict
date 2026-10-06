@@ -6,13 +6,13 @@
 //! the `*_unique` accessors report duplicates as an error instead of silently
 //! picking one.
 use crate::code_map::Mapped;
-use crate::{CodeMap, FragmentRef, UnorderedEq, UnorderedPartialEq, Value};
+use crate::{CodeMap, FragmentRef, UnorderedEq, UnorderedPartialEq, Value, dismantle::dismantle};
 use compact_str::CompactString;
 use core::cmp::Ordering;
 use core::hash::{Hash, Hasher};
 use core::{fmt, mem, slice};
 use std::error::Error as StdError;
-use std::vec::IntoIter;
+use std::vec::{Drain, IntoIter};
 
 mod index_map;
 
@@ -181,6 +181,22 @@ impl Object {
 	#[must_use]
 	pub const fn is_empty(&self) -> bool {
 		self.entries.is_empty()
+	}
+
+	/// Whether two entries of this object share a key.
+	///
+	/// Runs in `O(n)` over the key index; the object's descendants are not
+	/// inspected.
+	#[must_use]
+	pub fn contains_duplicate_keys(&self) -> bool {
+		self.indexes.contains_duplicate_keys()
+	}
+
+	/// Removes every entry, leaving the object empty, and yields them in
+	/// order.
+	pub(crate) fn drain_entries(&mut self) -> Drain<'_, Entry> {
+		self.indexes.clear();
+		self.entries.drain(..)
 	}
 
 	/// Returns the fragment at the given `index`, relative to the *contents*
@@ -1023,8 +1039,24 @@ impl IntoIterator for Object {
 	type Item = Entry;
 	type IntoIter = IntoIter<Entry>;
 
-	fn into_iter(self) -> Self::IntoIter {
-		self.entries.into_iter()
+	fn into_iter(mut self) -> Self::IntoIter {
+		self.indexes.clear();
+		mem::take(&mut self.entries).into_iter()
+	}
+}
+
+impl Drop for Object {
+	/// Drops the entries without recursing: every nested container is moved
+	/// onto a heap worklist and emptied there before it drops, so each drop
+	/// only ever sees empty children. An object holding no nested container
+	/// allocates nothing.
+	fn drop(&mut self) {
+		let mut pending: Vec<Value> = self
+			.drain_entries()
+			.map(Entry::into_value)
+			.filter(Value::is_nested_container)
+			.collect();
+		dismantle(&mut pending);
 	}
 }
 
@@ -1406,6 +1438,36 @@ mod tests {
 	use crate::BorrowUnordered;
 
 	use super::*;
+
+	#[test]
+	fn object_contains_duplicate_keys_is_true_for_a_repeated_member() {
+		let object = Object::from_vec(vec![
+			Entry::new("a".into(), Value::Null),
+			Entry::new("a".into(), Value::Boolean(true)),
+		]);
+		assert!(object.contains_duplicate_keys());
+	}
+
+	#[test]
+	fn object_contains_duplicate_keys_is_false_for_distinct_members() {
+		let object = Object::from_vec(vec![
+			Entry::new("a".into(), Value::Null),
+			Entry::new("b".into(), Value::Null),
+		]);
+		assert!(!object.contains_duplicate_keys());
+	}
+
+	#[test]
+	fn object_contains_duplicate_keys_is_false_after_the_duplicate_is_removed() {
+		let mut object = Object::from_vec(vec![
+			Entry::new("a".into(), Value::Null),
+			Entry::new("b".into(), Value::Null),
+			Entry::new("a".into(), Value::Boolean(true)),
+		]);
+		let removed = object.remove_at(2);
+		assert!(removed.is_some());
+		assert!(!object.contains_duplicate_keys());
+	}
 
 	#[test]
 	fn remove() {

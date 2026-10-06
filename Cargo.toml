@@ -1,7 +1,7 @@
 [package]
 name = "jstrict"
 description = "Strict RFC 8259 / ECMA-404 JSON parser with source code mapping"
-version = "0.15.0"
+version = "0.16.0"
 edition = "2024"
 rust-version = "1.96.0"
 authors = [
@@ -54,6 +54,7 @@ serde_json = { version = "1.0.151", optional = true }
 simdutf8 = { version = "0.1.5", optional = true }
 smallvec = "1.16.1"
 sonic-rs = { version = "0.5.10", optional = true }
+stacker = "0.1.25"
 utf8-decode = "2.0.0"
 
 [dev-dependencies]

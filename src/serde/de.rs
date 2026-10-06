@@ -111,7 +111,7 @@ impl<'de> Visitor<'de> for ValueVisitor {
 	where
 		V: SeqAccess<'de>,
 	{
-		let mut vec = Vec::with_capacity(visitor.size_hint().unwrap_or(0));
+		let mut vec = Array::with_capacity(visitor.size_hint().unwrap_or(0));
 
 		while let Some(elem) = visitor.next_element()? {
 			vec.push(elem);

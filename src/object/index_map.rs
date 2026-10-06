@@ -197,6 +197,10 @@ impl<S> IndexMap<S> {
 	pub fn contains_duplicate_keys(&self) -> bool {
 		self.table.iter().any(Indexes::is_redundant)
 	}
+
+	pub fn clear(&mut self) {
+		self.table.clear();
+	}
 }
 
 impl<S: BuildHasher> IndexMap<S> {
