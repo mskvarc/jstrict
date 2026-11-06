@@ -3,6 +3,7 @@
 //! Provides two types: the unsized [`Number`] type acting like `str`, and the
 //! [`NumberBuf<B>`] type owning the data inside the `B` type (by default
 //! `Vec<u8>`).
+use crate::number::decimal::Decimal;
 use core::ptr;
 use lexical::format::JSON;
 use smallvec::SmallVec;
@@ -12,6 +13,8 @@ use std::fmt;
 use std::ops::Deref;
 use std::str;
 use std::str::FromStr;
+
+mod decimal;
 
 /// `serde` support for [`Number`] and [`NumberBuf`].
 #[cfg(feature = "serde")]
@@ -418,20 +421,18 @@ impl Number {
 	/// Returns the number as a `f32` only if the operation does not induce
 	/// imprecisions/approximations.
 	///
+	/// The `f32` is lossless when its shortest decimal form has the same value
+	/// as this number, however either is written: `1.5E2` and `150.0` both
+	/// give `150.0`.
+	///
 	/// This operation is expensive as it requires allocating a new number
 	/// buffer to check the decimal representation of the generated `f32`.
 	#[inline(always)]
 	#[must_use]
 	pub fn as_f32_lossless(&self) -> Option<f32> {
 		let f = self.as_f32_lossy();
-		let Ok(n) = <NumberBuf as TryFrom<f32>>::try_from(f) else {
-			return None;
-		};
-		if n.as_number() == &*self.trimmed() {
-			Some(f)
-		} else {
-			None
-		}
+		let n = <NumberBuf as TryFrom<f32>>::try_from(f).ok()?;
+		(Decimal::of(&n)? == Decimal::of(self)?).then_some(f)
 	}
 
 	/// Returns this number as an `f64`, rounding if necessary.
@@ -445,16 +446,18 @@ impl Number {
 	/// Returns the number as a `f64` only if the operation does not induce
 	/// imprecisions/approximations.
 	///
+	/// The `f64` is lossless when its shortest decimal form has the same value
+	/// as this number, however either is written: `1.5E2` and `150.0` both
+	/// give `150.0`.
+	///
 	/// This operation is expensive as it requires allocating a new number
 	/// buffer to check the decimal representation of the generated `f64`.
 	#[inline(always)]
 	#[must_use]
 	pub fn as_f64_lossless(&self) -> Option<f64> {
 		let f = self.as_f64_lossy();
-		let Ok(n) = <NumberBuf as TryFrom<f64>>::try_from(f) else {
-			return None;
-		};
-		if n.as_number() == self { Some(f) } else { None }
+		let n = <NumberBuf as TryFrom<f64>>::try_from(f).ok()?;
+		(Decimal::of(&n)? == Decimal::of(self)?).then_some(f)
 	}
 
 	/// Returns the canonical representation of this number according to
@@ -769,7 +772,9 @@ macro_rules! impl_try_from_float {
 	};
 }
 
-impl_from_int!(u8, i8, u16, i16, u32, i32, u64, i64, usize, isize);
+impl_from_int!(
+	u8, i8, u16, i16, u32, i32, u64, i64, u128, i128, usize, isize
+);
 impl_try_from_float!(f32, f64);
 
 #[cfg(test)]
@@ -903,5 +908,53 @@ mod tests {
 	canonical_tests! {
 		canonical_01: "-0.0000" => "0",
 		canonical_02: "0.00000000028" => "2.8e-10"
+	}
+
+	macro_rules! lossless_f64_tests {
+		{ $($id:ident: $input:literal => $output:expr),* } => {
+			$(
+				#[test]
+				fn $id () {
+					assert_eq!(Number::new($input).unwrap().as_f64_lossless(), $output)
+				}
+			)*
+		};
+	}
+
+	lossless_f64_tests! {
+		an_f64_holds_a_short_decimal_losslessly: "1.1" => Some(1.1),
+		an_f64_holds_a_decimal_with_trailing_zeros_losslessly: "1.10" => Some(1.1),
+		an_f64_holds_an_exponent_form_losslessly: "1.5E2" => Some(150.0),
+		an_f64_holds_an_integer_exponent_losslessly: "1e3" => Some(1000.0),
+		an_f64_holds_zero_under_an_exponent_past_i64_losslessly: "0e99999999999999999999" => Some(0.0),
+		an_f64_cannot_hold_a_digit_past_its_precision: "1.00000000000000000001" => None,
+		an_f64_cannot_hold_a_number_past_its_range: "1e400" => None,
+		an_f64_cannot_hold_a_number_below_its_smallest_subnormal: "1e-400" => None
+	}
+
+	#[test]
+	fn an_f64_keeps_the_sign_of_negative_zero() {
+		for text in ["-0", "-0.0", "-0e5"] {
+			let f = Number::new(text).unwrap().as_f64_lossless().unwrap();
+			assert!(f == 0.0 && f.is_sign_negative(), "{text} gave {f}");
+		}
+	}
+
+	#[test]
+	fn an_f32_holds_an_exponent_form_losslessly() {
+		assert_eq!(Number::new("1.5E2").unwrap().as_f32_lossless(), Some(150.0));
+		assert_eq!(Number::new("1.00000001").unwrap().as_f32_lossless(), None);
+	}
+
+	#[test]
+	fn a_128_bit_integer_converts_to_a_number() {
+		assert_eq!(
+			NumberBuf::<Vec<u8>>::from(u128::MAX).as_str(),
+			"340282366920938463463374607431768211455"
+		);
+		assert_eq!(
+			NumberBuf::<Vec<u8>>::from(i128::MIN).as_str(),
+			"-170141183460469231731687303715884105728"
+		);
 	}
 }
