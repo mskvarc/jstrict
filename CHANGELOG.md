@@ -2,10 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.16.1] - 2026-11-06
+
+### 🐛 Bug Fixes
+- serialize a number through the primitive that holds its value
+
+### 🧹 Chores
+- bump version
+- update dependencies
+
 ## [v0.16.0] - 2026-10-06
 
 ### 🚀 Features
 - stack-safe drop and printing ⚠️ **BREAKING**
+
+### 🧹 Chores
+- update changelog
 
 ## [v0.15.0] - 2026-09-12
 
