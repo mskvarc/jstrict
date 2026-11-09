@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.16.2] - 2026-11-09
+
+### 🐛 Bug Fixes
+- sort canonical keys by utf-16 code units
+
+### 📚 Documentation
+- link the andromeda jstrict page and fix the readme example
+
+### 🧹 Chores
+- bump version
+
 ## [v0.16.1] - 2026-11-06
 
 ### 🐛 Bug Fixes
