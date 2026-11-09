@@ -1,7 +1,7 @@
 [package]
 name = "jstrict"
 description = "Strict RFC 8259 / ECMA-404 JSON parser with source code mapping"
-version = "0.16.1"
+version = "0.16.2"
 edition = "2024"
 rust-version = "1.96.0"
 authors = [
