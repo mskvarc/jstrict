@@ -90,7 +90,7 @@ A JSON object here is a *list* of entries, not a map. Duplicate keys are preserv
 
 Numbers are stored in their lexical form, so `1E30` round-trips as `1E30` and precision is never silently lost. `Number` exposes range-checked `as_i64` / `as_u64`, explicitly lossy `as_f64_lossy`, and `as_f64_lossless`, which returns `None` if the conversion would not round-trip.
 
-With the `canonicalize` feature, `Value::canonicalize` rewrites a value into the JSON Canonicalization Scheme form of [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785): keys sorted, numbers in shortest round-trip form. Use `canonicalize_with` in tight loops to reuse the float buffer.
+With the `canonicalize` feature, `Value::canonicalize` rewrites a value into the JSON Canonicalization Scheme form of [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785): keys sorted by their UTF-16 code units, numbers in shortest round-trip form. Use `canonicalize_with` in tight loops to reuse the float buffer.
 
 ## Printing
 

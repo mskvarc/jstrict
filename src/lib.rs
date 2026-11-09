@@ -924,6 +924,44 @@ mod tests {
 		);
 	}
 
+	/// The sorting sample of RFC 8785 section 3.2.3, whose expected order
+	/// differs from code point order in its last two entries.
+	#[cfg(feature = "canonicalize")]
+	#[test]
+	fn canonicalize_sorts_keys_by_utf16_code_units() {
+		use super::*;
+		let mut value: Value = json!({
+			"\u{20ac}": "Euro Sign",
+			"\r": "Carriage Return",
+			"\u{fb33}": "Hebrew Letter Dalet With Dagesh",
+			"1": "One",
+			"\u{1f600}": "Emoji: Grinning Face",
+			"\u{80}": "Control",
+			"\u{f6}": "Latin Small Letter O With Diaeresis"
+		});
+
+		value.canonicalize();
+
+		let order: Vec<&str> = value
+			.as_object()
+			.unwrap()
+			.iter()
+			.map(|entry| entry.value.as_str().unwrap())
+			.collect();
+		assert_eq!(
+			order,
+			[
+				"Carriage Return",
+				"One",
+				"Control",
+				"Latin Small Letter O With Diaeresis",
+				"Euro Sign",
+				"Emoji: Grinning Face",
+				"Hebrew Letter Dalet With Dagesh"
+			]
+		);
+	}
+
 	#[cfg(feature = "canonicalize")]
 	#[test]
 	fn canonicalize_02() {

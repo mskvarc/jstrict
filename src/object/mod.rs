@@ -885,15 +885,26 @@ impl Object {
 	/// Puts this JSON object in canonical form according to
 	/// [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785#name-generation-of-canonical-jso).
 	///
-	/// This will canonicalize the entries and sort them by key.
-	/// Entries with the same key are sorted by value.
+	/// This will canonicalize the entries and sort them by the UTF-16 code
+	/// units of their keys (RFC 8785 section 3.2.3). Entries with the same key
+	/// are sorted by value.
 	#[cfg(feature = "canonicalize")]
 	pub fn canonicalize_with(&mut self, buffer: &mut ryu_js::Buffer) {
 		for (_, item) in self.iter_mut() {
 			item.canonicalize_with(buffer);
 		}
 
-		self.sort();
+		// UTF-16 order differs from the code point order of `Key: Ord` once a
+		// key holds a character above U+FFFF and another key one in
+		// U+E000..=U+FFFF. Equal keys still compare equal, so each run of
+		// duplicates stays contiguous for `rebuild_sorted`.
+		self.entries.sort_unstable_by(|a, b| {
+			a.key
+				.encode_utf16()
+				.cmp(b.key.encode_utf16())
+				.then_with(|| a.value.cmp(&b.value))
+		});
+		self.indexes.rebuild_sorted(&self.entries);
 	}
 
 	/// Puts this JSON object in canonical form according to
