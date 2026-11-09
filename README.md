@@ -13,7 +13,7 @@ use jstrict::{Parse, Print, Value};
 let (value, code_map) = Value::parse_str(r#"{ "a": 0, "b": [1, 2] }"#)?;
 
 // Fragment 3 is the `0` bound to "a" — byte 7 of the source.
-assert_eq!(code_map[3].span.start(), 7);
+assert_eq!(code_map[3].span.start, 7);
 
 println!("{}", value.pretty_print());
 ```
@@ -34,6 +34,8 @@ let value = json!({
     "features": ["spans", "duplicates", "precision"]
 });
 ```
+
+[`jstrict` and what JSON leaves open](https://andromeda.skvarc.com/docs/libraries/jstrict/), on the Andromeda documentation site, explains why a JSON-LD processor needs a parser that keeps all of this.
 
 ---
 

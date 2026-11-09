@@ -11,6 +11,7 @@ authors = [
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/mskvarc/jstrict/"
+homepage = "https://andromeda.skvarc.com/docs/libraries/jstrict/"
 documentation = "https://docs.rs/jstrict"
 keywords = ["json", "parser", "rfc8259", "canonicalize", "simd"]
 categories = ["parser-implementations", "encoding", "data-structures"]
